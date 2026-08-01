@@ -1,0 +1,537 @@
+# Vision du Projet — Kelasi
+
+## 1. Le problème
+
+Les écoles primaires, collèges et lycées en Afrique gèrent aujourd'hui leur administration de façon fragmentée : cahiers papier pour les présences, carnets pour les notes, reçus manuels pour les paiements, communication informelle avec les parents (SMS individuels, bouche-à-oreille). Cela génère des pertes d'information, des erreurs de calcul de moyennes, des impayés non suivis, et aucune vision consolidée pour la direction.
+
+## 2. Ce qu'est Kelasi
+
+Kelasi est une plateforme SaaS **multi-école (multi-tenant)** qui centralise, pour un établissement scolaire, la gestion : des élèves, enseignants, classes, paiements, évaluations, présences et communication — depuis un seul outil, accessible à chaque rôle (direction, secrétariat, comptabilité, enseignants, parents) selon ses permissions.
+
+## 3. Principes produit (non négociables)
+
+Chaque fonctionnalité livrée doit respecter :
+
+- **Simple à utiliser** — utilisable sans formation poussée
+- **Rapide** — pas de friction, temps de réponse court
+- **Mobile Friendly** — utilisable depuis un téléphone
+- **Multi-école (multi-tenant)** — données strictement cloisonnées par école
+- **Sécurisée** — accès protégé, permissions par rôle
+- **API First** — le frontend ne parle qu'à l'API, jamais directement à la base
+- **Évolutive** — ne doit pas bloquer les évolutions futures (paiement mobile, IA, etc.)
+
+> Règle produit : aucune fonctionnalité ne doit compliquer inutilement le produit.
+
+## 4. Proposition de valeur par rôle
+
+| Rôle | Valeur apportée |
+|---|---|
+| Digitech (Super Admin) | Pilotage de toutes les écoles clientes et de leurs abonnements depuis une seule interface |
+| Directeur (School Admin) | Vision complète et instantanée de son établissement |
+| Secrétariat | Gestion administrative simplifiée (inscriptions, documents) |
+| Comptabilité | Suivi fiable des frais, paiements, impayés, reçus |
+| Enseignant | Accès rapide à ses classes, ses notes, ses présences |
+| Parent | Visibilité claire sur la scolarité de son/ses enfant(s) |
+
+## 5. Objectifs du MVP
+
+1. Remplacer la gestion papier/informelle par un outil numérique fiable pour les opérations critiques : inscription, présence, notes, paiement.
+2. Garantir l'étanchéité totale des données entre écoles (multi-tenant).
+3. Donner à chaque rôle un accès strictement limité à son périmètre.
+4. Générer les documents officiels (reçus, bulletins) automatiquement en PDF.
+
+## 6. Chaque nouvelle fonctionnalité doit répondre à 3 questions
+
+1. Résout-elle un vrai problème pour une école ?
+2. Est-elle suffisamment simple pour être utilisée sans formation complexe ?
+3. Apporte-t-elle une valeur mesurable à l'établissement ?
+
+Si la réponse est non à l'une de ces questions, la fonctionnalité ne doit pas être développée.
+
+## 7. Vision long terme
+
+Kelasi n'est pas seulement un logiciel de gestion scolaire : à terme, il doit devenir **le système d'exploitation numérique des établissements scolaires africains**, en intégrant progressivement portail parent, portail élève, application enseignant, paiement Mobile Money, bibliothèque numérique, e-learning, examens en ligne, comptabilité scolaire, RH, transport, cantine, IA pour l'administration et la réussite scolaire, et une API publique pour les intégrations (ministères, banques, partenaires).
+
+## 8. Indicateurs de succès (KPIs) suggérés
+
+- Nombre d'écoles actives sur la plateforme
+- Taux d'adoption par rôle (secrétariat, comptabilité, enseignants, parents)
+- Taux d'impayés détectés vs réellement recouvrés
+- Temps moyen de génération d'un bulletin
+- Taux de présence renseigné quotidiennement (adoption de l'appel numérique)
+
+*Ce document suit le même modèle que celui utilisé pour Livrex.*
+
+# Catalogue des Fonctionnalités — Kelasi
+
+Légende : ✅ MVP · 🟡 V1.1 · 🟠 V1.2 · 🔵 V2.0 · 🟣 V3.0
+
+## 1. Authentification & Rôles
+| Fonctionnalité | Détail | Version |
+|---|---|---|
+| Connexion par rôle | Super Admin, School Admin, Secretary, Accountant, Teacher, Parent | ✅ |
+| Permissions par route API | Ex. `students.read`, `payments.create`, `grades.publish` | ✅ |
+| Gestion des utilisateurs/permissions | Depuis Paramètres | ✅ |
+
+## 2. Dashboard
+| Fonctionnalité | Détail | Version |
+|---|---|---|
+| Widgets clés | Effectif total, présents aujourd'hui, paiements du jour, impayés, nouveaux élèves, recettes mensuelles | ✅ |
+| Graphiques | Vision instantanée de l'école | ✅ |
+
+## 3. Élèves
+| Fonctionnalité | Détail | Version |
+|---|---|---|
+| CRUD élève | Créer, modifier, supprimer | ✅ |
+| Import/Export | Liste d'élèves | ✅ |
+| Photo, documents, historique, statut | Fiche complète | ✅ |
+
+## 4. Parents
+| Fonctionnalité | Détail | Version |
+|---|---|---|
+| Fiche parent | Téléphone, adresse, profession | ✅ |
+| Lien multi-enfants | Un parent lié à plusieurs élèves | ✅ |
+| Portail Parent dédié (appli/consultation) | Accès enrichi aux infos de ses enfants | 🟠 |
+
+## 5. Enseignants
+| Fonctionnalité | Détail | Version |
+|---|---|---|
+| Fiche enseignant | Infos, matières, classes, statut | ✅ |
+| Accès restreint | Uniquement ses classes/matières/notes/présences | ✅ |
+
+## 6. Classes & Matières
+| Fonctionnalité | Détail | Version |
+|---|---|---|
+| Gestion classe | Niveau, nom, salle, enseignant principal, liste élèves | ✅ |
+| Gestion matières | Créer/modifier/supprimer, coefficient | ✅ |
+
+## 7. Présences
+| Fonctionnalité | Détail | Version |
+|---|---|---|
+| Appel quotidien | Présent / Absent / Retard / Justifié | ✅ |
+| Statistiques de présence | Par classe/élève | ✅ |
+| Notification parent en cas d'absence | Déclencheur automatique | ✅ |
+
+## 8. Notes & Bulletins
+| Fonctionnalité | Détail | Version |
+|---|---|---|
+| Créer évaluation, saisie notes | | ✅ |
+| Calcul automatique de moyenne, classement | | ✅ |
+| Validation + publication | | ✅ |
+| Génération bulletin PDF | | ✅ |
+
+## 9. Paiements
+| Fonctionnalité | Détail | Version |
+|---|---|---|
+| Types de frais, paiement, paiement partiel | Reste à payer suivi | ✅ |
+| Historique, reçu PDF | | ✅ |
+| Rapports financiers | | ✅ |
+| Paiement Mobile Money intégré | | 🔵 |
+| Module Comptabilité complet | | 🔵 |
+
+## 10. Communication
+| Fonctionnalité | Détail | Version |
+|---|---|---|
+| Notifications (déclencheurs : paiement, absence, annonce, bulletin, nouvel enseignant/élève) | | 🟡 |
+| SMS, Emails, Annonces (parents, enseignants, classes) | | 🟡 |
+| Calendrier | | 🟡 |
+| Documents partagés | | 🟡 |
+
+## 11. Rapports
+| Fonctionnalité | Détail | Version |
+|---|---|---|
+| Rapports de base (financiers, notes, présences) | | ✅ |
+| Rapports avancés | | 🟡 |
+
+## 12. Paramètres
+| Fonctionnalité | Détail | Version |
+|---|---|---|
+| Logo, informations école, années scolaires | | ✅ |
+| Gestion utilisateurs/permissions | | ✅ |
+
+## 13. Génération PDF
+| Document | Version |
+|---|---|
+| Reçu de paiement | ✅ |
+| Bulletin | ✅ |
+| Liste d'élèves | ✅ |
+| Rapport financier | ✅ |
+| Certificat de scolarité | 🟡 |
+| Carte scolaire | 🟡 |
+
+## 14. Fonctionnalités futures (V2.0 → V3.0)
+| Fonctionnalité | Version |
+|---|---|
+| Application Parent dédiée | 🟠 V1.2 |
+| Mobile Money, Comptabilité, RH, Bibliothèque, Cantine, Transport | 🔵 V2.0 |
+| Assistant administratif IA | 🟣 V3.0 |
+| Prévisions financières IA | 🟣 V3.0 |
+| Détection des risques d'abandon scolaire (IA) | 🟣 V3.0 |
+| Recommandations personnalisées (IA) | 🟣 V3.0 |
+
+## 15. Règle de gestion transverse : Multi-tenant
+
+Toutes les données appartiennent à une école (`school_id`). Aucune donnée ne peut être visible par une autre école — cette contrainte s'applique à **chaque** fonctionnalité ci-dessus, sans exception.
+
+
+# Architecture de l'Application — Kelasi
+
+## 0. Standard appliqué
+
+**RDS v1.0** intégral. Contrairement à Livrex, Kelasi a un vrai backend : `RDS-Database`, `RDS-API`, `RDS-Cloud` et `RDS-Security` (multi-tenant + RBAC) sont **actifs**, pas en N/A.
+
+## 1. Stack (hypothèse à valider avec le porteur technique)
+
+| Composant | Choix | Justification |
+|---|---|---|
+| Frontend | Next.js + TypeScript | Mobile friendly, SSR/SEO utile pour les pages publiques (inscription, portail parent futur) |
+| Backend | Node.js (NestJS) | Architecture modulaire native, adaptée au multi-tenant et aux permissions par route (`RDS-Architecture`) |
+| Base de données | PostgreSQL | Relationnel, adapté aux entités fortement liées (École/Élève/Classe/Paiement) |
+| Auth | JWT + OAuth2, RBAC | Rôles : Super Admin, School Admin, Secretary, Accountant, Teacher, Parent |
+| Génération PDF | Service dédié (ex. Puppeteer/PDFKit côté backend) | Reçus, bulletins, certificats, cartes scolaires |
+| Notifications | Service SMS/Email découplé (queue asynchrone) | Découplage des déclencheurs (paiement, absence, annonce...) |
+
+## 2. Principe d'architecture : API First, Clean Architecture, Multi-tenant
+
+```
+┌───────────────────────────────┐
+│     Frontend (Next.js)         │  ← ne parle QU'à l'API, jamais à la base
+├───────────────────────────────┤
+│         API (NestJS)           │
+│  Format de réponse unique :    │
+│  { success, message, data }    │
+├───────────────────────────────┤
+│   Couche Permissions (RBAC)    │  ← chaque route vérifie une permission
+│   ex: students.read,           │
+│       payments.create,         │
+│       grades.publish           │
+├───────────────────────────────┤
+│   Couche métier (Domain)       │  ← règles Kelasi (workflows)
+├───────────────────────────────┤
+│  Couche Multi-tenant           │  ← injecte/valide school_id sur CHAQUE requête
+├───────────────────────────────┤
+│      PostgreSQL (par école)     │
+└───────────────────────────────┘
+```
+
+## 3. Multi-tenant : règle absolue
+
+- Chaque requête entrante porte un `school_id` (issu du token/session, jamais du body librement modifiable par le client).
+- Chaque requête vers la base est automatiquement filtrée par `school_id` (au niveau ORM ou via Row Level Security PostgreSQL).
+- Aucune jointure ne doit pouvoir traverser les écoles.
+- Le Super Admin (Digitech) est le seul rôle à opérer transversalement, via des routes explicitement dédiées et auditées.
+
+## 4. Permissions (RBAC)
+
+Chaque route API porte une permission explicite (reprise du document source) :
+`students.read`, `students.create`, `students.update`, `students.delete`, `payments.create`, `payments.read`, `attendance.create`, `grades.publish`, `settings.manage`, etc.
+
+Principe : un rôle n'a accès qu'aux permissions qui lui sont explicitement attribuées — pas d'accès implicite par défaut.
+
+## 5. Format API unique
+
+```json
+{
+  "success": true,
+  "message": "",
+  "data": {}
+}
+```
+
+Toutes les réponses de l'API suivent ce format, y compris les erreurs (`success: false`, `message` explicite).
+
+## 6. Découpage modulaire (feature-first)
+
+- `modules/auth/`
+- `modules/dashboard/`
+- `modules/students/`, `modules/parents/`, `modules/teachers/`
+- `modules/classes/`, `modules/subjects/`
+- `modules/attendance/`
+- `modules/grades/` (évaluations, notes, bulletins)
+- `modules/payments/` (frais, paiements, reçus, rapports financiers)
+- `modules/communication/` (notifications, SMS, emails, annonces)
+- `modules/reports/`
+- `modules/settings/`
+- `core/tenant/` — résolution et validation du `school_id`
+- `core/permissions/` — vérification RBAC centralisée
+- `core/pdf/` — génération de documents
+
+## 7. Sécurité (`RDS-Security` + OWASP)
+
+- HTTPS obligatoire, TLS 1.3
+- Validation stricte des entrées sur chaque route (surtout création paiement/note, sensibles)
+- Chiffrement des données sensibles au repos (téléphones, adresses)
+- Logs d'audit sur les actions critiques (paiement, publication de notes, suppression d'élève)
+- Rate limiting sur les routes d'authentification
+
+## 8. Observabilité minimale MVP
+
+- Logs d'erreurs centralisés côté backend
+- Health check API de base
+- Monitoring plus poussé (Sentry/Prometheus) à introduire en V1.1 quand le nombre d'écoles clientes augmente
+
+*Section à ajuster dès validation de la stack réelle par le porteur technique de Kelasi.*
+
+
+# Modèle de Données — Kelasi
+
+> Base relationnelle (PostgreSQL, hypothèse — voir `03-architecture-application.md`). **Toutes les entités métier portent un `schoolId`** (sauf `School` elle-même et les entités globales Digitech).
+
+## 1. Entités principales (reprises et détaillées du document source)
+
+### `School`
+`id, nom, logo, adresse, telephone, statutAbonnement, dateCreation`
+
+### `AcademicYear` (Année scolaire) — scope `schoolId`
+`id, schoolId, libelle (ex. 2026-2027), dateDebut, dateFin, statut (active/archivee)`
+
+### `Term` (Trimestre/Semestre) — scope `schoolId`
+`id, schoolId, academicYearId, libelle, dateDebut, dateFin`
+
+### `User` — scope `schoolId` (sauf Super Admin)
+`id, schoolId (nullable pour Super Admin), nom, email, telephone, motDePasseHash, statut`
+
+### `Role`
+`id, nom (super_admin, school_admin, secretary, accountant, teacher, parent), permissions[]`
+
+### `Student` (Élève) — scope `schoolId`
+`id, schoolId, matricule, nom, prenom, dateNaissance, photo, classroomId, statut (actif/inactif), documents[]`
+
+### `Parent` — scope `schoolId`
+`id, schoolId, nom, telephone, adresse, profession, studentIds[] (multi-enfants)`
+
+### `Teacher` (Enseignant) — scope `schoolId`
+`id, schoolId, userId, nom, matieres[], classes[], statut`
+
+### `Classroom` (Classe) — scope `schoolId`
+`id, schoolId, niveau, nom, salle, enseignantPrincipalId, studentIds[]`
+
+### `Subject` (Matière) — scope `schoolId`
+`id, schoolId, nom, coefficient`
+
+### `Enrollment` (Inscription) — scope `schoolId`
+`id, schoolId, studentId, classroomId, academicYearId, dateInscription, statut`
+
+### `Attendance` (Présence) — scope `schoolId`
+`id, schoolId, studentId, classroomId, date, statut (present/absent/retard/justifie)`
+
+### `Assessment` (Évaluation) — scope `schoolId`
+`id, schoolId, subjectId, classroomId, termId, libelle, date, coefficient`
+
+### `Grade` (Note) — scope `schoolId`
+`id, schoolId, assessmentId, studentId, note, statutValidation (brouillon/valide/publie)`
+
+### `Invoice` (Facture/Frais) — scope `schoolId`
+`id, schoolId, studentId, typeFrais, montantTotal, montantPaye, resteAPayer, dateEmission`
+
+### `Payment` (Paiement) — scope `schoolId`
+`id, schoolId, invoiceId, montant, datePaiement, modePaiement, partiel (bool)`
+
+### `Receipt` (Reçu) — scope `schoolId`
+`id, schoolId, paymentId, referencePdf, dateGeneration`
+
+### `Notification` — scope `schoolId`
+`id, schoolId, type (paiement/absence/annonce/bulletin/nouvel_enseignant/nouvel_eleve), destinataireId, canal (sms/email/in-app), statut`
+
+### `Announcement` (Annonce) — scope `schoolId`
+`id, schoolId, auteurId, cible (parents/enseignants/classe), contenu, datePublication`
+
+## 2. Relations principales
+
+```
+School (1) ──< AcademicYear ──< Term
+School (1) ──< Classroom ──< Student
+School (1) ──< Teacher
+Student (N) ──< Enrollment >── (1) Classroom
+Classroom (1) ──< Attendance >── (1) Student
+Classroom (1) ──< Subject (via Assessment)
+Assessment (1) ──< Grade >── (1) Student
+Student (1) ──< Invoice ──< Payment ──< Receipt
+Parent (1) ──< Student (plusieurs enfants possibles)
+```
+
+## 3. Règles d'intégrité multi-tenant (impératif)
+
+1. **Aucune requête ne doit pouvoir retourner des données d'un `schoolId` différent** de celui de l'utilisateur authentifié (sauf Super Admin, via routes dédiées).
+2. Toute clé étrangère référencée (ex. `classroomId` sur un `Student`) doit être validée comme appartenant au **même** `schoolId`.
+3. Un `Payment` ne peut excéder le `resteAPayer` de la `Invoice` associée.
+4. Une `Grade` ne peut être `publie` que si son statut précédent est `valide`.
+5. Une `Attendance` = statut `absent` doit déclencher une `Notification` vers le(s) `Parent` de l'élève.
+
+## 4. Index recommandés (performance)
+
+- `Student(schoolId, classroomId)`
+- `Attendance(schoolId, studentId, date)`
+- `Payment(schoolId, invoiceId)`
+- `Grade(schoolId, studentId, assessmentId)`
+
+*Modèle à affiner une fois la stack backend validée (ORM cible, choix RLS PostgreSQL natif vs filtrage applicatif systématique).*
+
+# Design System — Kelasi
+
+## 1. Source du design system : skill `ui-ux-pro-max`
+
+Même skill que pour Livrex (`nextlevelbuilder/ui-ux-pro-max-skill`), avec une requête adaptée au produit :
+
+```
+python3 skills/ui-ux-pro-max/scripts/search.py \
+  "education school management SaaS multi-role dashboard" \
+  --design-system \
+  --stack react \
+  --density 7 \
+  -p "Kelasi" \
+  --persist
+```
+
+- `--density 7` : un cran en dessous de Livrex — Kelasi a des écrans denses (dashboard, tableaux d'élèves/notes) mais aussi des écrans plus "humains" pour les parents (bulletins, annonces), donc un compromis.
+- Persisté dans `design-system/MASTER.md`, à régénérer par page si besoin (`--page dashboard`, `--page bulletin`, etc.) vu la diversité des rôles/écrans.
+
+## 2. Orientation visuelle par défaut (base avant génération réelle)
+
+- **Ton** : institutionnel, rassurant, professionnel — Kelasi s'adresse à des directeurs d'école et des parents, pas seulement à des power users.
+- **Palette** : une couleur primaire "identité Kelasi" + un système de couleurs sémantiques par statut :
+  - Paiement à jour : vert · Impayé : rouge · Partiel : orange
+  - Présent : vert · Absent : rouge · Retard : orange · Justifié : gris-bleu
+- **Typographie** : lisible, formelle mais chaleureuse (le produit touche des enfants/familles, pas seulement du back-office pur).
+- **Densité adaptative par rôle** : dashboard admin/comptabilité dense ; vues Parent et Enseignant plus aérées et guidées (moins de choix affichés à la fois).
+
+## 3. Composants clés à couvrir
+
+- Cartes indicateurs (dashboard école)
+- Tableau élèves/notes/présences filtrable, avec appel quotidien rapide (present/absent/retard/justifié en un clic)
+- Générateur de bulletin (aperçu + export PDF)
+- Formulaire de paiement avec calcul automatique du reste à payer
+- Fil de notifications/annonces
+- Sélecteur de rôle/contexte (un directeur peut naviguer entre plusieurs écoles s'il en gère plusieurs — à valider)
+
+## 4. Accessibilité et contexte d'usage
+
+- Mobile-friendly impératif (principe produit Kelasi) — les enseignants font l'appel souvent depuis un téléphone.
+- WCAG 2.2 AA — contraste suffisant pour un usage en extérieur/luminosité variable.
+- Connexions parfois limitées selon les zones → mêmes précautions que Livrex (chargements progressifs, pas de blocage total).
+
+## 5. Persistance du design system
+
+`design-system/MASTER.md` (et ses variantes par page) devient la source de vérité visuelle — à relire avant toute session UI et à maintenir cohérent (règle README).
+
+*Point de départ, à remplacer par la sortie réelle du skill une fois générée dans l'environnement de dev.*
+
+# Roadmap de Développement — Kelasi
+
+## Phase 0 — Cadrage
+- [ ] Valider la stack technique (Next.js/NestJS/PostgreSQL — hypothèse en `03-architecture-application.md`)
+- [ ] Générer le design system via `ui-ux-pro-max` (`design-system/MASTER.md`)
+- [ ] Initialiser le repo GitHub, structure modulaire feature-first
+- [ ] Poser la stratégie multi-tenant (RLS PostgreSQL vs filtrage applicatif)
+
+## Phase 1 — Fondations (`RDS-Architecture`, `RDS-Security`)
+- [ ] `core/tenant` (résolution/validation `school_id` sur chaque requête)
+- [ ] `core/permissions` (RBAC par route)
+- [ ] Authentification (JWT + OAuth2), rôles : Super Admin, School Admin, Secretary, Accountant, Teacher, Parent
+- [ ] Format de réponse API unique `{ success, message, data }`
+
+## Phase 2 — Modules cœur MVP
+- [ ] Élèves (CRUD, import/export, photo, documents, historique, statut)
+- [ ] Parents (fiche, lien multi-enfants)
+- [ ] Classes & Matières
+- [ ] Enseignants (accès restreint à leurs classes/matières)
+- [ ] Dashboard (widgets clés + graphiques)
+
+## Phase 3 — Présences & Notes
+- [ ] Appel quotidien (présent/absent/retard/justifié)
+- [ ] Notification automatique aux parents en cas d'absence
+- [ ] Évaluations, saisie notes, calcul moyenne/classement
+- [ ] Validation + publication des notes
+- [ ] Génération bulletin PDF
+
+## Phase 4 — Paiements
+- [ ] Types de frais, paiement, paiement partiel, reste à payer
+- [ ] Historique + reçu PDF
+- [ ] Rapports financiers de base
+
+## Phase 5 — Finitions MVP & conformité
+- [ ] `RDS-Testing` : unit + integration sur les workflows critiques (inscription, paiement, publication de notes)
+- [ ] `RDS-A11y` : passe WCAG 2.2 AA
+- [ ] Revue sécurité (`RDS-Security`/OWASP) — en particulier isolation multi-tenant
+- [ ] Mise à jour finale du README (état d'avancement + reste à faire)
+
+## V1.1 — Communication & Rapports avancés
+- [ ] Notifications (SMS, Email, Annonces)
+- [ ] Calendrier, documents partagés
+- [ ] Rapports avancés
+- [ ] Observabilité renforcée (logs structurés, monitoring)
+
+## V1.2 — Application Parent
+
+## V2.0 — Extension métier
+- [ ] Mobile Money
+- [ ] Comptabilité
+- [ ] RH
+- [ ] Bibliothèque, Cantine, Transport
+
+## V3.0 — Intelligence Artificielle
+- [ ] Assistant administratif
+- [ ] Prévisions financières
+- [ ] Détection des risques d'abandon scolaire
+- [ ] Recommandations personnalisées
+
+*Chaque case cochée doit être répercutée dans l'"État d'avancement" du `README.md` racine de Kelasi.*
+
+# Kelasi — Plateforme SaaS de Gestion Scolaire (Digitech)
+
+## À propos de ce dépôt
+
+Documentation de spécification de Kelasi, éclatée en documents thématiques (même modèle que Livrex) pour faciliter le travail de développement, limiter la consommation de tokens par requête, et permettre à chaque collaborateur de charger uniquement le document pertinent à sa tâche.
+
+## Structure des documents
+
+| Fichier | Contenu |
+|---|---|
+| `01-vision-projet.md` | Contexte, mission, principes produit, vision long terme |
+| `02-catalogue-fonctionnalites.md` | Catalogue complet des modules et fonctionnalités (par version) |
+| `03-architecture-application.md` | Architecture technique — API-first, multi-tenant, backend réel |
+| `04-modele-donnees.md` | Entités, relations, multi-tenant |
+| `05-design-system.md` | Système de design (via skill `ui-ux-pro-max`) |
+| `06-roadmap-developpement.md` | Roadmap MVP → V3.0 |
+
+## Standard d'ingénierie appliqué
+
+**RDS v1.0** (Reisch Development Standard) s'applique intégralement à ce projet. Contrairement à Livrex (frontend-only), Kelasi a un vrai backend et une vraie base de données : les sections `RDS-Database`, `RDS-API`, `RDS-Cloud` et `RDS-Security`/`RDS-Multitenant` sont donc **actives** (pas en N/A).
+
+## Hypothèse de stack (à valider)
+
+En l'absence de précision contraire, je pars de l'exemple donné dans le RDS pour un projet avec backend réel :
+
+- Frontend : **Next.js + TypeScript**
+- Backend : **Node.js (NestJS)** — architecture modulaire adaptée au multi-tenant et aux permissions par route
+- Base de données : **PostgreSQL**
+- Auth : **JWT + OAuth2**, RBAC par rôle (Super Admin, School Admin, Secretary, Accountant, Teacher, Parent)
+- API : REST, format de réponse unique `{ success, message, data }` (imposé par le document source)
+
+Dis-moi si le porteur technique de Kelasi impose autre chose (comme pour Livrex) — je mettrai les documents à jour en conséquence.
+
+## Règle de fonctionnement pour les collaborateurs
+
+1. Avant de commencer : relire ce README + le document thématique concerné.
+2. En cours de travail : une info = un seul document source, pas de duplication.
+3. À la fin d'une session : mettre à jour *État d'avancement* et *Reste à faire* ci-dessous.
+
+## État d'avancement
+
+- [x] Documentation de spécification initiale éclatée en 6 documents
+- [ ] Stack technique validée par le porteur technique
+- [ ] Design system généré (`ui-ux-pro-max`)
+- [ ] Modèle de données implémenté (multi-tenant)
+- [ ] Modules MVP développés (Auth, Dashboard, Élèves, Parents, Classes, Paiements, Présences, Notes, Bulletins)
+
+## Reste à faire
+
+- Valider la stack technique (section ci-dessus)
+- Générer et persister le design system (`design-system/MASTER.md`)
+- Définir la stratégie d'isolation multi-tenant au niveau base de données (RLS PostgreSQL vs filtrage applicatif systématique par `school_id`)
+
+## Système de communication
+
+Mots-clés (`TLDR:`, `SPEC:`, `OPTIONS:`, `CRITIQUE:`, etc.) toujours en vigueur pour ce projet.
+
+
