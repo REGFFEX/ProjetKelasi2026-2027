@@ -38,11 +38,6 @@ next-env.d.ts
 # temporary files
 ~$*
 
-#my local doc
-projetkelassilocalsave/
-kelasimaindoc/
-Kelasidocsup
-
 # my local doc
 projetkelassilocalsave/
 kelasimaindoc/
