@@ -14,11 +14,6 @@ const statusConfig = {
   paye: { label: 'Payé', color: 'text-success', bg: 'bg-success/10', dot: 'bg-success' },
   partiel: { label: 'Partiel', color: 'text-warning', bg: 'bg-warning/10', dot: 'bg-warning' },
   impaye: { label: 'Impayé', color: 'text-destructive', bg: 'bg-destructive/10', dot: 'bg-destructive' },
-  en_attente: { label: 'En attente', color: 'text-muted-foreground', bg: 'bg-muted/10', dot: 'bg-muted-foreground' },
-};
-
-const getStatusConfig = (status?: string) => {
-  return statusConfig[status as keyof typeof statusConfig] ?? statusConfig.en_attente;
 };
 
 const methodLabels: Record<PaymentMethod, string> = {
@@ -78,8 +73,7 @@ export function PaymentsContent() {
     return invoices.filter(inv => {
       const studentName = getStudentName(inv.student_id).toLowerCase();
       const matchSearch = studentName.includes(search.toLowerCase());
-      const normalizedStatus = inv.statut === 'en_attente' ? 'impaye' : inv.statut;
-      const matchStatus = statusFilter === 'all' || normalizedStatus === statusFilter;
+      const matchStatus = statusFilter === 'all' || inv.statut === statusFilter;
       return matchSearch && matchStatus;
     });
   }, [invoices, search, statusFilter, students]);
@@ -193,7 +187,7 @@ export function PaymentsContent() {
               </thead>
               <tbody className="divide-y divide-border">
                 {filteredInvoices.map(inv => {
-                  const cfg = getStatusConfig(inv.statut);
+                  const cfg = statusConfig[inv.statut as keyof typeof statusConfig];
                   const student = students.find(s => s.id === inv.student_id);
                   const initials = student ? `${student.prenom[0]}${student.nom[0]}` : '?';
                   return (
@@ -241,7 +235,7 @@ export function PaymentsContent() {
         {/* Cards — mobile */}
         <div className="md:hidden space-y-3">
           {filteredInvoices.map(inv => {
-            const cfg = getStatusConfig(inv.statut);
+            const cfg = statusConfig[inv.statut as keyof typeof statusConfig];
             const student = students.find(s => s.id === inv.student_id);
             const initials = student ? `${student.prenom[0]}${student.nom[0]}` : '?';
             return (
