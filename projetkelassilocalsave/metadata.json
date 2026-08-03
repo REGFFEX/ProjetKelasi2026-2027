@@ -1,6 +1,0 @@
-{
-  "name": "Kelasi — Gestion Scolaire",
-  "description": "Plateforme SaaS de gestion scolaire pour établissements africains",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
