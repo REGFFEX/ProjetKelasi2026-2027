@@ -3,50 +3,16 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { GraduationCap, Mail, Lock, ArrowRight, Shield, UserCog, Calculator, BookOpen, Users, CheckCircle2, Loader2 } from 'lucide-react';
-import type { Role } from '@/lib/types';
-import { roleLabels } from '@/lib/navigation';
-import { cn } from '@/lib/utils';
+import { GraduationCap, Mail, Lock, ArrowRight, CheckCircle2, Loader2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
-
-const roleIcons: Record<Role, typeof Shield> = {
-  super_admin: Shield,
-  school_admin: UserCog,
-  secretary: Users,
-  accountant: Calculator,
-  teacher: BookOpen,
-  parent: Users,
-};
-
-const roles: Role[] = ['school_admin', 'secretary', 'accountant', 'teacher', 'parent'];
 
 export default function LoginPage() {
   const router = useRouter();
   const { signIn, session } = useAuth();
-  const [selectedRole, setSelectedRole] = useState<Role>('school_admin');
-  const [email, setEmail] = useState('directeur@kelasi.cd');
-  const [password, setPassword] = useState('Kelasi2026!');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-
-  // Auto fill preset demo accounts when changing role tab if fields haven't been customized heavily
-  const demoCredentials: Record<Role, { email: string; pass: string }> = {
-    super_admin: { email: 'admin@kelasi.cd', pass: 'Kelasi2026!' },
-    school_admin: { email: 'directeur@kelasi.cd', pass: 'Kelasi2026!' },
-    secretary: { email: 'secretaire@kelasi.cd', pass: 'Kelasi2026!' },
-    accountant: { email: 'comptable@kelasi.cd', pass: 'Kelasi2026!' },
-    teacher: { email: 'prof.esther@kelasi.cd', pass: 'Kelasi2026!' },
-    parent: { email: 'parent.jean@kelasi.cd', pass: 'Kelasi2026!' },
-  };
-
-  const handleRoleSelect = (r: Role) => {
-    setSelectedRole(r);
-    const preset = demoCredentials[r];
-    if (preset) {
-      setEmail(preset.email);
-      setPassword(preset.pass);
-    }
-  };
 
   // Redirect to dashboard if already logged in
   useEffect(() => {
@@ -57,7 +23,7 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     setLoading(true);
-    const { error: signInError } = await signIn(email, password, selectedRole);
+    const { error: signInError } = await signIn(email, password);
     if (signInError) {
       setError(signInError);
       setLoading(false);
@@ -89,17 +55,20 @@ export default function LoginPage() {
         </div>
 
         <div className="relative z-10 max-w-md text-white">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold leading-tight mb-3 sm:mb-4 text-balance">
-            Le système d'exploitation numérique des établissements scolaires africains
+          <div className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-3 py-1 text-sm font-medium text-white/90 backdrop-blur-sm">
+            Nouvelle génération de gestion scolaire
+          </div>
+          <h1 className="mt-4 text-2xl sm:text-3xl lg:text-4xl font-bold leading-tight text-balance">
+            Solution tout-en-un pour piloter votre école.
           </h1>
-          <p className="text-white/80 text-base sm:text-lg leading-relaxed hidden sm:block">
-            Gérez élèves, notes, présences, paiements et communication — depuis un seul outil, accessible à chaque rôle.
+          <p className="mt-3 text-white/80 text-base leading-relaxed max-w-lg">
+            Suivi des élèves, notes, présences, paiements et communication, dans une expérience moderne et fluide.
           </p>
           <div className="mt-6 sm:mt-8 grid grid-cols-3 gap-2 sm:gap-4">
             {[
               { label: 'Écoles', value: '50+' },
               { label: 'Élèves', value: '12K+' },
-              { label: 'Dispo.', value: '99.9%' },
+              { label: 'Disponibilité', value: '99.9%' },
             ].map(s => (
               <div key={s.label} className="rounded-2xl bg-white/10 backdrop-blur-md p-3 sm:p-4 border border-white/10">
                 <p className="text-xl sm:text-2xl font-bold">{s.value}</p>
@@ -113,38 +82,12 @@ export default function LoginPage() {
       </div>
 
       {/* Right panel — login form */}
-      <div className="flex-1 flex items-center justify-center p-6 sm:p-8 lg:p-12 bg-background">
-        <div className="w-full max-w-md">
-          <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-1.5">Connexion</h2>
-          <p className="text-sm sm:text-base text-muted-foreground mb-6 sm:mb-8">Sélectionnez votre rôle et connectez-vous</p>
-
-          {/* Role selector */}
+      <div className="flex-1 flex items-center justify-center p-4 sm:p-8 lg:p-12 bg-background">
+        <div className="w-full max-w-md rounded-3xl border border-border/70 bg-card/90 p-6 shadow-[0_20px_60px_-25px_rgba(15,23,42,0.35)] backdrop-blur-sm sm:p-8">
           <div className="mb-6">
-            <label className="text-sm font-medium text-foreground mb-3 block">Je suis...</label>
-            <div className="grid grid-cols-3 gap-2">
-              {roles.map(r => {
-                const Icon = roleIcons[r];
-                const isActive = selectedRole === r;
-                return (
-                  <button
-                    key={r}
-                    type="button"
-                    onClick={() => handleRoleSelect(r)}
-                    className={cn(
-                      'flex flex-col items-center gap-1.5 rounded-2xl border p-3 text-center transition-all duration-200 active:scale-95',
-                      isActive
-                        ? 'border-primary bg-primary/5 ring-2 ring-primary/20 shadow-sm'
-                        : 'border-border hover:border-primary/40 hover:bg-muted/50'
-                    )}
-                  >
-                    <Icon className={cn('h-5 w-5', isActive ? 'text-primary' : 'text-muted-foreground')} />
-                    <span className={cn('text-xs font-medium', isActive ? 'text-primary' : 'text-foreground')}>
-                      {roleLabels[r]}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-primary">Connexion</p>
+            <h2 className="mt-2 text-2xl font-bold text-foreground">Accédez à votre espace</h2>
+            <p className="mt-2 text-sm text-muted-foreground">Connectez-vous avec votre compte et vous serez orienté vers votre tableau de bord selon votre profil.</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
@@ -156,7 +99,7 @@ export default function LoginPage() {
                   type="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  className="w-full rounded-xl border border-input bg-muted/30 pl-10 pr-3 py-2.5 text-sm focus:border-primary focus:bg-card focus:outline-none focus:ring-2 focus:ring-primary/15 transition-all"
+                  className="w-full rounded-2xl border border-input bg-background/80 pl-10 pr-3 py-2.75 text-sm focus:border-primary focus:bg-card focus:outline-none focus:ring-2 focus:ring-primary/15 transition-all"
                   placeholder="votre@email.com"
                   required
                 />
@@ -171,7 +114,7 @@ export default function LoginPage() {
                   type="password"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
-                  className="w-full rounded-xl border border-input bg-muted/30 pl-10 pr-3 py-2.5 text-sm focus:border-primary focus:bg-card focus:outline-none focus:ring-2 focus:ring-primary/15 transition-all"
+                  className="w-full rounded-2xl border border-input bg-background/80 pl-10 pr-3 py-2.75 text-sm focus:border-primary focus:bg-card focus:outline-none focus:ring-2 focus:ring-primary/15 transition-all"
                   placeholder="••••••••"
                   required
                 />
@@ -179,17 +122,17 @@ export default function LoginPage() {
             </div>
 
             {error && (
-              <div className="rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive animate-fade-in">
+              <div className="rounded-2xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive animate-fade-in">
                 {error}
               </div>
             )}
 
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
-                <input type="checkbox" className="rounded border-input" />
-                Se souvenir
-              </label>
-              <button type="button" className="text-sm text-primary hover:underline">
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <CheckCircle2 className="h-4 w-4 text-success" />
+                <span>Connexion sécurisée</span>
+              </div>
+              <button type="button" className="text-primary hover:underline font-medium">
                 Mot de passe oublié?
               </button>
             </div>
@@ -197,18 +140,13 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-all active:scale-[0.97] shadow-lg shadow-primary/20 disabled:opacity-60"
+              className="w-full flex items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-all active:scale-[0.97] shadow-lg shadow-primary/20 disabled:opacity-60"
             >
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Se connecter <ArrowRight className="h-4 w-4" /></>}
             </button>
           </form>
 
-          <div className="mt-6 flex items-center gap-2 text-xs text-muted-foreground justify-center">
-            <CheckCircle2 className="h-3.5 w-3.5 text-success" />
-            <span>Connexion sécurisée · Données chiffrées</span>
-          </div>
-
-          <p className="mt-4 text-center text-sm text-muted-foreground">
+          <p className="mt-6 text-center text-sm text-muted-foreground">
             Pas encore de compte?{' '}
             <Link href="/signup" className="text-primary hover:underline font-medium">
               Créer un compte

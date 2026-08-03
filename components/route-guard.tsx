@@ -21,6 +21,8 @@ export function RouteGuard({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   useEffect(() => {
+    const currentPath = pathname ?? '/';
+
     if (loading) return;
     if (!session) {
       router.replace('/');
@@ -28,8 +30,8 @@ export function RouteGuard({ children }: { children: ReactNode }) {
     }
     if (profile) {
       const allowed = roleAccess[profile.role] ?? [];
-      const isAllowed = allowed.some(p => pathname === p || pathname.startsWith(p + '/') || pathname.startsWith(p));
-      if (!isAllowed && pathname !== '/dashboard') {
+      const isAllowed = allowed.some(p => currentPath === p || currentPath.startsWith(p + '/') || currentPath.startsWith(p));
+      if (!isAllowed && currentPath !== '/dashboard') {
         router.replace('/dashboard');
       }
     }

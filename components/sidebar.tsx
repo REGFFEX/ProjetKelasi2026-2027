@@ -127,7 +127,8 @@ export function Sidebar() {
         <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-1.5 custom-scrollbar">
           {items.map(item => {
             const Icon = (Icons as unknown as Record<string, Icons.LucideIcon>)[item.icon] || Icons.Circle;
-            const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+            const currentPath = pathname ?? '/';
+            const isActive = currentPath === item.href || currentPath.startsWith(item.href + '/');
             return (
               <Link
                 key={item.href}
@@ -188,7 +189,8 @@ export function Sidebar() {
       <nav className="fixed bottom-0 left-0 right-0 z-30 flex items-center justify-around border-t border-border bg-background/95 backdrop-blur-md px-2 py-2 lg:hidden safe-area-inset-bottom shadow-lg">
         {items.slice(0, 5).map(item => {
           const Icon = (Icons as unknown as Record<string, Icons.LucideIcon>)[item.icon] || Icons.Circle;
-          const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+          const currentPath = pathname ?? '/';
+          const isActive = currentPath === item.href || currentPath.startsWith(item.href + '/');
           return (
             <Link
               key={item.href}

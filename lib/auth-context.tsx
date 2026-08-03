@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, ReactNode, useCallback 
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import type { Role } from './types';
+import { enableDemoAuth } from './config';
 
 export interface UserProfile {
   id: string;
@@ -105,9 +106,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback(async (email: string, password: string, role?: Role, nom?: string) => {
     let { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-    // If sign in failed due to invalid credentials, attempt auto-signup for demo/convenience users
+    // In development, allow demo accounts for local testing; otherwise keep auth strict.
     if (error && (error.message.includes('Invalid login credentials') || error.message.includes('User not found'))) {
-      const isDemoDomain = email.endsWith('@kelasi.cd') || email.endsWith('@ecole-excellence.cd') || email.includes('demo');
+      const isDemoDomain = enableDemoAuth && (email.endsWith('@kelasi.cd') || email.endsWith('@ecole-excellence.cd') || email.includes('demo'));
       if (isDemoDomain) {
         const userRole = role || (email.includes('directeur') ? 'school_admin' : email.includes('secretaire') ? 'secretary' : email.includes('comptable') ? 'accountant' : email.includes('prof') || email.includes('enseignant') ? 'teacher' : email.includes('parent') ? 'parent' : 'school_admin');
         const userNom = nom || (userRole === 'school_admin' ? 'Joseph Kabasele' : userRole === 'secretary' ? 'Marie Kalala' : userRole === 'accountant' ? 'Paul Mukendi' : userRole === 'teacher' ? 'Esther Tshala' : 'Jean Mukendi');
