@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { GraduationCap, Mail, Lock, User, Phone, Building2, ArrowRight, ArrowLeft, CheckCircle2, Loader2 } from 'lucide-react';
 import type { Role } from '@/lib/types';
-import { roleLabels } from '@/lib/navigation';
+import { getDefaultRouteForRole, roleLabels } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
 import { fetchSchools } from '@/lib/api';
@@ -68,7 +68,7 @@ export default function SignUpPage() {
       setError(signUpError);
       setLoading(false);
     } else {
-      router.push('/');
+      router.replace(getDefaultRouteForRole(formData.role));
     }
   };
 

@@ -5,19 +5,22 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { GraduationCap, Mail, Lock, ArrowRight, CheckCircle2, Loader2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
+import { getDefaultRouteForRole } from '@/lib/navigation';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { signIn, session } = useAuth();
+  const { signIn, session, profile } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Redirect to dashboard if already logged in
+  // Redirect to the right home page based on the authenticated role
   useEffect(() => {
-    if (session) router.replace('/dashboard');
-  }, [session, router]);
+    if (session && profile) {
+      router.replace(getDefaultRouteForRole(profile.role));
+    }
+  }, [session, profile, router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,8 +30,6 @@ export default function LoginPage() {
     if (signInError) {
       setError(signInError);
       setLoading(false);
-    } else {
-      router.push('/dashboard');
     }
   };
 

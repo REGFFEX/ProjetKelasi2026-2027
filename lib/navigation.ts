@@ -62,3 +62,20 @@ export const roleLabels: Record<Role, string> = {
   teacher: 'Enseignant',
   parent: 'Parent',
 };
+
+export function getDefaultRouteForRole(role?: Role): string {
+  switch (role) {
+    case 'super_admin':
+    case 'school_admin':
+      return '/dashboard';
+    case 'secretary':
+      return '/students';
+    case 'accountant':
+      return '/payments';
+    case 'teacher':
+      return '/classes';
+    case 'parent':
+    default:
+      return '/dashboard';
+  }
+}

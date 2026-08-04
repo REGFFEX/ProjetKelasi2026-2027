@@ -8,6 +8,8 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { formatMoney, fetchStudents, fetchAttendance, fetchInvoices, fetchPayments, fetchClassrooms, fetchNotifications } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
+import type { Role } from '@/lib/types';
 
 interface DashboardData {
   effectifTotal: number;
@@ -27,6 +29,7 @@ interface DashboardData {
 const PIE_COLORS = ['#0ea5e9', '#22c55e', '#f59e0b', '#ef4444'];
 
 export function DashboardContent() {
+  const { profile } = useAuth();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -127,23 +130,76 @@ export function DashboardContent() {
     );
   }
 
-  const stats = [
-    { label: 'Effectif total', value: String(data.effectifTotal), icon: Users, color: 'text-primary', bg: 'bg-primary/10', trend: '+5 ce mois', trendUp: true },
-    { label: 'Présents', value: String(data.presents), icon: UserCheck, color: 'text-success', bg: 'bg-success/10', trend: '80% présence', trendUp: true },
-    { label: 'Absents', value: String(data.absents), icon: UserX, color: 'text-destructive', bg: 'bg-destructive/10', trend: '1 justifié', trendUp: false },
-    { label: 'Retards', value: String(data.retards), icon: Clock, color: 'text-warning', bg: 'bg-warning/10', trend: 'À surveiller', trendUp: false },
-    { label: 'Paiements du jour', value: formatMoney(data.paiementsDuJour), icon: Wallet, color: 'text-info', bg: 'bg-info/10', trend: '+12% vs hier', trendUp: true },
-    { label: 'Impayés total', value: formatMoney(data.impayesTotal), icon: AlertCircle, color: 'text-destructive', bg: 'bg-destructive/10', trend: '8 élèves', trendUp: false },
-    { label: 'Nouveaux élèves', value: String(data.nouveauxEleves), icon: GraduationCap, color: 'text-primary', bg: 'bg-primary/10', trend: 'Ce mois-ci', trendUp: true },
-    { label: 'Recettes mensuelles', value: formatMoney(data.recettesMensuelles), icon: TrendingUp, color: 'text-success', bg: 'bg-success/10', trend: '+14%', trendUp: true },
-  ];
+  const roleTitle: Record<Role, string> = {
+    super_admin: 'Vue d’administration centrale',
+    school_admin: 'Vue directeur',
+    secretary: 'Vue secrétariat',
+    accountant: 'Vue comptabilité',
+    teacher: 'Vue enseignant',
+    parent: 'Vue parent',
+  };
+
+  const roleSubtitle: Record<Role, string> = {
+    super_admin: 'Suivi global de votre réseau scolaire',
+    school_admin: 'Pilotage de l’établissement et de ses équipes',
+    secretary: 'Gestion administrative et accompagnement des familles',
+    accountant: 'Suivi des paiements et des finances',
+    teacher: 'Suivi des classes et des évaluations',
+    parent: 'Vue synthétique de votre espace parent',
+  };
+
+  const roleStats: Record<Role, Array<{ label: string; value: string; icon: typeof Users; color: string; bg: string; trend: string; trendUp: boolean }>> = {
+    super_admin: [
+      { label: 'Établissements', value: '3', icon: GraduationCap, color: 'text-primary', bg: 'bg-primary/10', trend: 'Actifs', trendUp: true },
+      { label: 'Élèves', value: String(data.effectifTotal), icon: Users, color: 'text-success', bg: 'bg-success/10', trend: 'En ligne', trendUp: true },
+      { label: 'Paiements', value: formatMoney(data.paiementsDuJour), icon: Wallet, color: 'text-info', bg: 'bg-info/10', trend: 'Aujourd’hui', trendUp: true },
+      { label: 'Impayés', value: formatMoney(data.impayesTotal), icon: AlertCircle, color: 'text-destructive', bg: 'bg-destructive/10', trend: 'À relancer', trendUp: false },
+    ],
+    school_admin: [
+      { label: 'Effectif total', value: String(data.effectifTotal), icon: Users, color: 'text-primary', bg: 'bg-primary/10', trend: '+5 ce mois', trendUp: true },
+      { label: 'Présents', value: String(data.presents), icon: UserCheck, color: 'text-success', bg: 'bg-success/10', trend: '80% présence', trendUp: true },
+      { label: 'Absents', value: String(data.absents), icon: UserX, color: 'text-destructive', bg: 'bg-destructive/10', trend: '1 justifié', trendUp: false },
+      { label: 'Retards', value: String(data.retards), icon: Clock, color: 'text-warning', bg: 'bg-warning/10', trend: 'À surveiller', trendUp: false },
+      { label: 'Paiements du jour', value: formatMoney(data.paiementsDuJour), icon: Wallet, color: 'text-info', bg: 'bg-info/10', trend: '+12% vs hier', trendUp: true },
+      { label: 'Impayés total', value: formatMoney(data.impayesTotal), icon: AlertCircle, color: 'text-destructive', bg: 'bg-destructive/10', trend: '8 élèves', trendUp: false },
+      { label: 'Nouveaux élèves', value: String(data.nouveauxEleves), icon: GraduationCap, color: 'text-primary', bg: 'bg-primary/10', trend: 'Ce mois-ci', trendUp: true },
+      { label: 'Recettes mensuelles', value: formatMoney(data.recettesMensuelles), icon: TrendingUp, color: 'text-success', bg: 'bg-success/10', trend: '+14%', trendUp: true },
+    ],
+    secretary: [
+      { label: 'Élèves', value: String(data.effectifTotal), icon: Users, color: 'text-primary', bg: 'bg-primary/10', trend: 'Actifs', trendUp: true },
+      { label: 'Présents', value: String(data.presents), icon: UserCheck, color: 'text-success', bg: 'bg-success/10', trend: 'Aujourd’hui', trendUp: true },
+      { label: 'Absents', value: String(data.absents), icon: UserX, color: 'text-destructive', bg: 'bg-destructive/10', trend: 'À traiter', trendUp: false },
+      { label: 'Nouveaux élèves', value: String(data.nouveauxEleves), icon: GraduationCap, color: 'text-info', bg: 'bg-info/10', trend: 'Ce mois', trendUp: true },
+    ],
+    accountant: [
+      { label: 'Paiements du jour', value: formatMoney(data.paiementsDuJour), icon: Wallet, color: 'text-success', bg: 'bg-success/10', trend: 'Aujourd’hui', trendUp: true },
+      { label: 'Impayés', value: formatMoney(data.impayesTotal), icon: AlertCircle, color: 'text-destructive', bg: 'bg-destructive/10', trend: 'À relancer', trendUp: false },
+      { label: 'Recettes', value: formatMoney(data.recettesMensuelles), icon: TrendingUp, color: 'text-primary', bg: 'bg-primary/10', trend: 'Ce mois', trendUp: true },
+      { label: 'Élèves', value: String(data.effectifTotal), icon: Users, color: 'text-info', bg: 'bg-info/10', trend: 'Actifs', trendUp: true },
+    ],
+    teacher: [
+      { label: 'Classes', value: String(Math.min(4, data.effectifTotal > 0 ? Math.ceil(data.effectifTotal / 20) : 1)), icon: ClipboardList, color: 'text-primary', bg: 'bg-primary/10', trend: 'Assignées', trendUp: true },
+      { label: 'Présents', value: String(data.presents), icon: UserCheck, color: 'text-success', bg: 'bg-success/10', trend: 'Aujourd’hui', trendUp: true },
+      { label: 'Absents', value: String(data.absents), icon: UserX, color: 'text-destructive', bg: 'bg-destructive/10', trend: 'À suivre', trendUp: false },
+      { label: 'Notes', value: '12', icon: ClipboardList, color: 'text-warning', bg: 'bg-warning/10', trend: 'À publier', trendUp: false },
+    ],
+    parent: [
+      { label: 'Élèves', value: '2', icon: GraduationCap, color: 'text-primary', bg: 'bg-primary/10', trend: 'Suivis', trendUp: true },
+      { label: 'Paiements', value: '2', icon: Wallet, color: 'text-success', bg: 'bg-success/10', trend: 'À jour', trendUp: true },
+      { label: 'Absences', value: '0', icon: UserCheck, color: 'text-info', bg: 'bg-info/10', trend: 'Cette semaine', trendUp: true },
+      { label: 'Messages', value: '3', icon: MessageSquare, color: 'text-warning', bg: 'bg-warning/10', trend: 'Nouveaux', trendUp: false },
+    ],
+  };
+
+  const currentRole = profile?.role ?? 'school_admin';
+  const stats = roleStats[currentRole] ?? roleStats.school_admin;
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold text-foreground truncate">Tableau de bord</h1>
-          <p className="text-sm text-muted-foreground mt-0.5 truncate">{new Date().toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground truncate">{roleTitle[currentRole]}</h1>
+          <p className="text-sm text-muted-foreground mt-0.5 truncate">{roleSubtitle[currentRole]} · {new Date().toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
         </div>
         <div className="flex flex-wrap gap-2 shrink-0">
           <Link href="/attendance">
