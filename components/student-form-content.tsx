@@ -10,7 +10,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
-import { fetchClassrooms, fetchParents, fetchStudentById, createStudent, updateStudent } from '@/lib/api';
+import {
+  fetchClassrooms,
+  fetchParents,
+  fetchStudentById,
+  fetchStudentParents,
+  createStudent,
+  updateStudent,
+  setStudentParents,
+} from '@/lib/api';
 
 interface ClassroomRow { id: string; nom: string; niveau: string; }
 interface ParentRow { id: string; nom: string; telephone: string; profession: string; }
@@ -41,7 +49,10 @@ export function StudentFormContent({ mode, studentId }: { mode: 'create' | 'edit
         setParents(p as ParentRow[]);
 
         if (mode === 'edit' && studentId) {
-          const s = await fetchStudentById(studentId);
+          const [s, linkedParents] = await Promise.all([
+            fetchStudentById(studentId),
+            fetchStudentParents(studentId),
+          ]);
           if (s) {
             setFormData(prev => ({
               ...prev,
@@ -51,6 +62,7 @@ export function StudentFormContent({ mode, studentId }: { mode: 'create' | 'edit
               date_naissance: s.date_naissance,
               classroom_id: s.classroom_id ?? '',
               statut: s.statut as 'actif' | 'inactif',
+              parentIds: linkedParents.map(p => p.id),
             }));
           }
         }
@@ -69,7 +81,6 @@ export function StudentFormContent({ mode, studentId }: { mode: 'create' | 'edit
     setSaving(true);
     try {
       const payload = {
-        school_id: profile.school_id,
         matricule: formData.matricule,
         nom: formData.nom,
         prenom: formData.prenom,
@@ -77,11 +88,10 @@ export function StudentFormContent({ mode, studentId }: { mode: 'create' | 'edit
         classroom_id: formData.classroom_id,
         statut: formData.statut,
       };
-      if (mode === 'edit' && studentId) {
-        await updateStudent(studentId, payload);
-      } else {
-        await createStudent(payload);
-      }
+      const id = mode === 'edit' && studentId
+        ? (await updateStudent(studentId, payload)).id
+        : (await createStudent(payload)).id;
+      await setStudentParents(id, formData.parentIds);
       router.push('/students');
     } catch (err) {
       console.error('Save error:', err);

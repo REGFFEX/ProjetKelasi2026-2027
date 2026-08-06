@@ -1,0 +1,21 @@
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: kelasi_root_pw
+      MYSQL_DATABASE: kelasi
+      MYSQL_USER: kelasi
+      MYSQL_PASSWORD: kelasi_pw
+    ports:
+      - "3306:3306"
+    volumes:
+      - kelasi_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pkelasi_root_pw"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  kelasi_mysql_data:

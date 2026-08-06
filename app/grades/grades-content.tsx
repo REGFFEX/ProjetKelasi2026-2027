@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { ClipboardList, Plus, Eye, CheckCircle, Clock, FileText, Download, Send, ArrowLeft, Save, Loader2 } from 'lucide-react';
-import { fetchAssessments, fetchSubjects, fetchClassrooms, fetchStudents, fetchGrades } from '@/lib/api';
+import { fetchAssessments, fetchSubjects, fetchClassrooms, fetchStudents, fetchGrades, upsertGrades } from '@/lib/api';
 import type { GradeStatus } from '@/lib/types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,7 @@ export function GradesContent() {
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
   const [bulletinStudentId, setBulletinStudentId] = useState<string | null>(null);
   const [gradeValues, setGradeValues] = useState<Record<string, string>>({});
+  const [savingGrades, setSavingGrades] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [assessments, setAssessments] = useState<Awaited<ReturnType<typeof fetchAssessments>>>([]);
@@ -212,6 +213,28 @@ export function GradesContent() {
     if (!assessment) return null;
     const classStudents = students.filter(s => s.classroom_id === assessment.classroom_id);
 
+    const handleSaveGrades = async () => {
+      const records = classStudents
+        .map(s => ({ student_id: s.id, raw: gradeValues[s.id] }))
+        .filter(r => r.raw !== undefined && r.raw !== '' && !isNaN(parseFloat(r.raw)) && parseFloat(r.raw) >= 0 && parseFloat(r.raw) <= 20)
+        .map(r => ({ assessment_id: assessment.id, student_id: r.student_id, note: parseFloat(r.raw) }));
+
+      if (records.length === 0) return;
+      setSavingGrades(true);
+      try {
+        const saved = await upsertGrades(records);
+        setGrades(prev => {
+          const savedStudentIds = new Set(saved.map(g => g.student_id));
+          const others = prev.filter(g => !(g.assessment_id === assessment.id && savedStudentIds.has(g.student_id)));
+          return [...others, ...saved];
+        });
+      } catch (e) {
+        console.error('Failed to save grades:', e);
+      } finally {
+        setSavingGrades(false);
+      }
+    };
+
     return (
       <div className="space-y-5 sm:space-y-6 animate-fade-in">
         <div className="flex items-center gap-4">
@@ -279,8 +302,9 @@ export function GradesContent() {
             <p className="text-sm text-muted-foreground">
               {Object.keys(gradeValues).length}/{classStudents.length} élèves notés
             </p>
-            <Button className="gap-1.5 rounded-xl active:scale-95 transition-all">
-              <Save className="h-4 w-4" /> <span className="hidden sm:inline">Enregistrer</span>
+            <Button onClick={handleSaveGrades} disabled={savingGrades} className="gap-1.5 rounded-xl active:scale-95 transition-all">
+              {savingGrades ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              <span className="hidden sm:inline">Enregistrer</span>
             </Button>
           </div>
         </Card>

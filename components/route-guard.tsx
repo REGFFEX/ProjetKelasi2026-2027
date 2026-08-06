@@ -16,7 +16,7 @@ const roleAccess: Record<Role, string[]> = {
 };
 
 export function RouteGuard({ children }: { children: ReactNode }) {
-  const { session, profile, loading } = useAuth();
+  const { profile, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -24,20 +24,18 @@ export function RouteGuard({ children }: { children: ReactNode }) {
     const currentPath = pathname ?? '/';
 
     if (loading) return;
-    if (!session) {
+    if (!profile) {
       router.replace('/');
       return;
     }
-    if (profile) {
-      const allowed = roleAccess[profile.role] ?? [];
-      const isAllowed = allowed.some(p => currentPath === p || currentPath.startsWith(p + '/') || currentPath.startsWith(p));
-      if (!isAllowed && currentPath !== '/dashboard') {
-        router.replace('/dashboard');
-      }
+    const allowed = roleAccess[profile.role] ?? [];
+    const isAllowed = allowed.some(p => currentPath === p || currentPath.startsWith(p + '/') || currentPath.startsWith(p));
+    if (!isAllowed && currentPath !== '/dashboard') {
+      router.replace('/dashboard');
     }
-  }, [session, profile, loading, pathname, router]);
+  }, [profile, loading, pathname, router]);
 
-  if (loading || !session) {
+  if (loading || !profile) {
     return (
       <div className="flex items-center justify-center h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

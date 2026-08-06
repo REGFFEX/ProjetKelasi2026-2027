@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { fetchStudents, fetchClassrooms, fetchParents, fetchAllStudentParents } from '@/lib/api';
+import { fetchStudents, fetchClassrooms, fetchParents, fetchAllStudentParents, deleteStudent } from '@/lib/api';
 
 interface StudentRow {
   id: string;
@@ -75,6 +75,16 @@ export function StudentsListContent() {
     return parentIds
       .map(pid => parents.find(p => p.id === pid)?.nom)
       .filter((n): n is string => !!n);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Supprimer cet élève ?')) return;
+    try {
+      await deleteStudent(id);
+      setStudents(prev => prev.filter(s => s.id !== id));
+    } catch (err) {
+      console.error('Failed to delete student:', err);
+    }
   };
 
   const filtered = useMemo(() => {
@@ -219,7 +229,7 @@ export function StudentsListContent() {
                             <Pencil className="h-4 w-4" />
                           </Button>
                         </Link>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-lg text-destructive hover:text-destructive">
+                        <Button variant="ghost" size="sm" onClick={() => handleDelete(s.id)} className="h-8 w-8 p-0 rounded-lg text-destructive hover:text-destructive">
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>

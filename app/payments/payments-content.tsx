@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { Wallet, Plus, Search, Download, FileText, ArrowLeft, Save, CreditCard, TrendingUp, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
-import { fetchInvoices, fetchPayments, fetchStudents, fetchClassrooms, formatMoney } from '@/lib/api';
+import { fetchInvoices, fetchPayments, fetchStudents, fetchClassrooms, formatMoney, createPayment } from '@/lib/api';
 import type { PaymentMethod } from '@/lib/types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,7 @@ const methodLabels: Record<PaymentMethod, string> = {
   cheque: 'Chèque',
   virement: 'Virement',
   mobile_money: 'Mobile Money',
+  carte_bancaire: 'Carte bancaire',
 };
 
 type View = 'list' | 'payment' | 'receipt';
@@ -37,6 +38,7 @@ export function PaymentsContent() {
   const [selectedInvoice, setSelectedInvoice] = useState<Awaited<ReturnType<typeof fetchInvoices>>[number] | null>(null);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('especes');
+  const [submittingPayment, setSubmittingPayment] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [invoices, setInvoices] = useState<Awaited<ReturnType<typeof fetchInvoices>>>([]);
@@ -297,6 +299,26 @@ export function PaymentsContent() {
     const isPartial = amount < selectedInvoice.reste_a_payer && amount > 0;
     const exceedsReste = amount > selectedInvoice.reste_a_payer;
 
+    const handleSubmitPayment = async () => {
+      if (exceedsReste || amount <= 0) return;
+      setSubmittingPayment(true);
+      try {
+        const result = await createPayment({
+          invoice_id: selectedInvoice.id,
+          montant: amount,
+          mode_paiement: paymentMethod,
+        });
+        setInvoices(prev => prev.map(inv => (inv.id === result.invoice.id ? result.invoice : inv)));
+        setPayments(prev => [result.payment, ...prev]);
+        setSelectedInvoice(result.invoice);
+        setView('receipt');
+      } catch (e) {
+        console.error('Failed to record payment:', e);
+      } finally {
+        setSubmittingPayment(false);
+      }
+    };
+
     return (
       <div className="max-w-2xl mx-auto space-y-5 sm:space-y-6 animate-fade-in">
         <div className="flex items-center gap-3">
@@ -404,8 +426,9 @@ export function PaymentsContent() {
 
             <div className="flex items-center justify-end gap-3">
               <Button variant="outline" className="rounded-xl active:scale-[0.97]" onClick={() => setView('list')}>Annuler</Button>
-              <Button className="gap-1.5 rounded-xl active:scale-[0.97]" disabled={exceedsReste || amount <= 0} onClick={() => setView('receipt')}>
-                <Save className="h-4 w-4" /> <span className="hidden sm:inline">Enregistrer & générer le reçu</span><span className="sm:hidden">Enregistrer</span>
+              <Button className="gap-1.5 rounded-xl active:scale-[0.97]" disabled={exceedsReste || amount <= 0 || submittingPayment} onClick={handleSubmitPayment}>
+                {submittingPayment ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                <span className="hidden sm:inline">Enregistrer & générer le reçu</span><span className="sm:hidden">Enregistrer</span>
               </Button>
             </div>
           </div>

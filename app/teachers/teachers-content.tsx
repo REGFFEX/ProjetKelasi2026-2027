@@ -2,17 +2,31 @@
 
 import { useState, useEffect } from 'react';
 import { Plus, Mail, Phone, BookOpen, School, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
-import { fetchTeachers, fetchSubjects, fetchClassrooms } from '@/lib/api';
+import { fetchTeachers, fetchSubjects, fetchClassrooms, createTeacher } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+
+const emptyTeacherForm = { nom: '', prenom: '', email: '', telephone: '', matiere_ids: [] as string[], classroom_ids: [] as string[] };
 
 export function TeachersContent() {
   const [loading, setLoading] = useState(true);
   const [teachers, setTeachers] = useState<Awaited<ReturnType<typeof fetchTeachers>>>([]);
   const [subjects, setSubjects] = useState<Awaited<ReturnType<typeof fetchSubjects>>>([]);
   const [classrooms, setClassrooms] = useState<Awaited<ReturnType<typeof fetchClassrooms>>>([]);
+  const [showCreate, setShowCreate] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState(emptyTeacherForm);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,6 +57,29 @@ export function TeachersContent() {
   const getSubjectName = (id: string) => subjects.find(s => s.id === id)?.nom || 'Inconnu';
   const getClassroomName = (id: string) => classrooms.find(c => c.id === id)?.nom || 'Inconnu';
 
+  const toggleField = (field: 'matiere_ids' | 'classroom_ids', id: string) => {
+    setForm(prev => ({
+      ...prev,
+      [field]: prev[field].includes(id) ? prev[field].filter(x => x !== id) : [...prev[field], id],
+    }));
+  };
+
+  const handleCreateTeacher = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.nom.trim() || !form.prenom.trim() || !form.email.trim()) return;
+    setCreating(true);
+    try {
+      const created = await createTeacher(form);
+      setTeachers(prev => [...prev, created].sort((a, b) => a.nom.localeCompare(b.nom)));
+      setForm(emptyTeacherForm);
+      setShowCreate(false);
+    } catch (err) {
+      console.error('Failed to create teacher:', err);
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -50,10 +87,74 @@ export function TeachersContent() {
           <h1 className="text-xl sm:text-2xl font-bold text-foreground">Enseignants</h1>
           <p className="text-muted-foreground mt-1">{teachers.length} enseignant(s) — {teachers.filter(t => t.statut === 'actif').length} actifs</p>
         </div>
-        <Button className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform">
+        <Button onClick={() => setShowCreate(true)} className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform">
           <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nouvel enseignant</span>
         </Button>
       </div>
+
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent className="rounded-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Nouvel enseignant</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreateTeacher} className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="t-prenom">Prénom *</Label>
+                <Input id="t-prenom" value={form.prenom} onChange={e => setForm({ ...form, prenom: e.target.value })} required className="mt-1.5 rounded-xl" />
+              </div>
+              <div>
+                <Label htmlFor="t-nom">Nom *</Label>
+                <Input id="t-nom" value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} required className="mt-1.5 rounded-xl" />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="t-email">Email *</Label>
+              <Input id="t-email" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required className="mt-1.5 rounded-xl" />
+            </div>
+            <div>
+              <Label htmlFor="t-telephone">Téléphone</Label>
+              <Input id="t-telephone" value={form.telephone} onChange={e => setForm({ ...form, telephone: e.target.value })} className="mt-1.5 rounded-xl" />
+            </div>
+            <div>
+              <Label className="mb-1.5 block">Matières</Label>
+              <div className="flex flex-wrap gap-1.5 max-h-[100px] overflow-y-auto scrollbar-thin">
+                {subjects.map(s => (
+                  <button
+                    type="button"
+                    key={s.id}
+                    onClick={() => toggleField('matiere_ids', s.id)}
+                    className={cn('badge-modern text-xs px-2.5 py-1 rounded-full border', form.matiere_ids.includes(s.id) ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground')}
+                  >
+                    {s.nom}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <Label className="mb-1.5 block">Classes</Label>
+              <div className="flex flex-wrap gap-1.5 max-h-[100px] overflow-y-auto scrollbar-thin">
+                {classrooms.map(c => (
+                  <button
+                    type="button"
+                    key={c.id}
+                    onClick={() => toggleField('classroom_ids', c.id)}
+                    className={cn('badge-modern text-xs px-2.5 py-1 rounded-full border', form.classroom_ids.includes(c.id) ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground')}
+                  >
+                    {c.nom}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={creating} className="gap-1.5 rounded-xl">
+                {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                Créer
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         {teachers.map(t => (

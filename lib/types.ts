@@ -167,7 +167,7 @@ export interface Invoice {
   statut: 'paye' | 'partiel' | 'impaye';
 }
 
-export type PaymentMethod = 'especes' | 'cheque' | 'virement' | 'mobile_money';
+export type PaymentMethod = 'especes' | 'cheque' | 'virement' | 'mobile_money' | 'carte_bancaire';
 
 export interface Payment {
   id: string;

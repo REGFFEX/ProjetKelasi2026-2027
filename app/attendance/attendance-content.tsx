@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { CheckSquare, Check, X, Clock, FileText, Save, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
-import { fetchStudents, fetchClassrooms, fetchAttendance, fetchParents, fetchAllStudentParents } from '@/lib/api';
+import { fetchStudents, fetchClassrooms, fetchAttendance, fetchParents, fetchAllStudentParents, upsertAttendance } from '@/lib/api';
 import type { AttendanceStatus } from '@/lib/types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,37 +23,29 @@ export function AttendanceContent() {
   const [classrooms, setClassrooms] = useState<Awaited<ReturnType<typeof fetchClassrooms>>>([]);
   const [parents, setParents] = useState<Awaited<ReturnType<typeof fetchParents>>>([]);
   const [studentParents, setStudentParents] = useState<{ id: string; school_id: string; student_id: string; parent_id: string }[]>([]);
-  const [existingAttendance, setExistingAttendance] = useState<Awaited<ReturnType<typeof fetchAttendance>>>([]);
 
   const [selectedClass, setSelectedClass] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [attendanceState, setAttendanceState] = useState<Record<string, AttendanceStatus>>({});
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [s, c, p, sp, att] = await Promise.all([
+        const [s, c, p, sp] = await Promise.all([
           fetchStudents(),
           fetchClassrooms(),
           fetchParents(),
           fetchAllStudentParents(),
-          fetchAttendance(),
         ]);
         if (cancelled) return;
         setStudents(s);
         setClassrooms(c);
         setParents(p);
         setStudentParents(sp);
-        setExistingAttendance(att);
         if (c.length > 0) setSelectedClass(c[0].id);
-        // Initialize attendance state from fetched data
-        const state: Record<string, AttendanceStatus> = {};
-        att.forEach(a => {
-          state[a.student_id] = a.statut as AttendanceStatus;
-        });
-        setAttendanceState(state);
       } catch (e) {
         console.error('Failed to load attendance data:', e);
       } finally {
@@ -62,6 +54,28 @@ export function AttendanceContent() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // Re-fetch attendance for the selected class + date whenever either changes,
+  // instead of seeding state once from an unfiltered fetch.
+  useEffect(() => {
+    if (!selectedClass || !date) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const att = await fetchAttendance({ classroom_id: selectedClass, date });
+        if (cancelled) return;
+        const state: Record<string, AttendanceStatus> = {};
+        att.forEach(a => {
+          state[a.student_id] = a.statut as AttendanceStatus;
+        });
+        setAttendanceState(state);
+        setSaved(false);
+      } catch (e) {
+        console.error('Failed to load attendance for class/date:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedClass, date]);
 
   const classStudents = useMemo(() => {
     return students.filter(s => s.classroom_id === selectedClass);
@@ -88,9 +102,24 @@ export function AttendanceContent() {
     setSaved(false);
   };
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await upsertAttendance(
+        classStudents.map(s => ({
+          student_id: s.id,
+          classroom_id: selectedClass,
+          date,
+          statut: attendanceState[s.id] || 'present',
+        }))
+      );
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (e) {
+      console.error('Failed to save attendance:', e);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const summary = useMemo(() => {
@@ -117,8 +146,9 @@ export function AttendanceContent() {
           <h1 className="text-xl sm:text-2xl font-bold text-foreground">Appel quotidien</h1>
           <p className="text-sm text-muted-foreground mt-1">Marquez la présence de chaque élève</p>
         </div>
-        <Button onClick={handleSave} className="gap-1.5 self-start active:scale-95 transition-transform">
-          <Save className="h-4 w-4" /> {saved ? 'Enregistré!' : 'Enregistrer l\'appel'}
+        <Button onClick={handleSave} disabled={saving} className="gap-1.5 self-start active:scale-95 transition-transform">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          {saved ? 'Enregistré!' : 'Enregistrer l\'appel'}
         </Button>
       </div>
 
