@@ -1,0 +1,28 @@
+[Unit]
+Description=Kelasi FastAPI backend
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=kelasi
+Group=kelasi
+WorkingDirectory=/opt/kelasi/backend
+EnvironmentFile=/opt/kelasi/backend/.env
+ExecStart=/opt/kelasi/backend/.venv/bin/gunicorn app.main:app \
+  --workers 3 \
+  --worker-class uvicorn.workers.UvicornWorker \
+  --bind 127.0.0.1:8000 \
+  --access-logfile - \
+  --error-logfile -
+Restart=on-failure
+RestartSec=5
+
+# Hardening (safe defaults for a single-purpose app service)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

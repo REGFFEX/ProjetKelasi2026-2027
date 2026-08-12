@@ -27,6 +27,8 @@ yarn-error.log*
 # local env files
 .env
 .env*.local
+.env.production
+!.env.production.example
 
 # vercel
 .vercel
@@ -51,4 +53,6 @@ backend/.venv/
 backend/__pycache__/
 backend/**/__pycache__/
 backend/.env
+backend/.env.production
+!backend/.env.production.example
 backend/*.egg-info/
