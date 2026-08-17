@@ -431,6 +431,18 @@ export async function fetchSchools(): Promise<DbSchool[]> {
   }));
 }
 
+/** The logged-in user's own school, with full details — not the bare login/signup picker list. */
+export const fetchMySchool = () => apiGet<DbSchool | null>('/schools/me');
+
+export interface SchoolSelfUpdateInput {
+  nom?: string;
+  adresse?: string;
+  telephone?: string;
+  logo?: string;
+}
+
+export const updateMySchool = (updates: SchoolSelfUpdateInput) => apiPatch<DbSchool>('/schools/me', updates);
+
 // ── Super admin: manage all schools + subscriptions ──────────
 
 export interface DbSchoolAdmin {

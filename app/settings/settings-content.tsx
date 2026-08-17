@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { School, Users, Calendar, Save, Upload, Shield, UserCog, Calculator, BookOpen, Mail, Lock, Bell, Loader2, CheckCircle2, Layers, Plus, Pencil, Trash2, GraduationCap, Power } from 'lucide-react';
 import {
-  fetchSchools,
+  fetchMySchool,
+  updateMySchool,
   fetchUsers,
   createUser,
   updateUser,
@@ -77,7 +78,11 @@ const roleIcons: Record<Role, typeof Shield> = {
 export function SettingsContent() {
   const [tab, setTab] = useState<Tab>('school');
   const [loading, setLoading] = useState(true);
-  const [schools, setSchools] = useState<Awaited<ReturnType<typeof fetchSchools>>>([]);
+  const [school, setSchool] = useState<Awaited<ReturnType<typeof fetchMySchool>>>(null);
+  const [schoolForm, setSchoolForm] = useState({ nom: '', adresse: '', telephone: '' });
+  const [savingSchool, setSavingSchool] = useState(false);
+  const [schoolError, setSchoolError] = useState('');
+  const [schoolSaved, setSchoolSaved] = useState(false);
   const [users, setUsers] = useState<Awaited<ReturnType<typeof fetchUsers>>>([]);
   const [academicYears, setAcademicYears] = useState<Awaited<ReturnType<typeof fetchAcademicYears>>>([]);
   const [showYearDialog, setShowYearDialog] = useState(false);
@@ -115,14 +120,15 @@ export function SettingsContent() {
     (async () => {
       try {
         const [s, u, y, cyc, lvl] = await Promise.all([
-          fetchSchools(),
+          fetchMySchool(),
           fetchUsers(),
           fetchAcademicYears(),
           fetchCycles(),
           fetchLevels(),
         ]);
         if (cancelled) return;
-        setSchools(s);
+        setSchool(s);
+        if (s) setSchoolForm({ nom: s.nom, adresse: s.adresse, telephone: s.telephone });
         setUsers(u as { id: string; school_id: string; nom: string; email: string; telephone: string; role: Role; statut: string }[]);
         setAcademicYears(y);
         setCycles(cyc.sort((a, b) => a.ordre - b.ordre));
@@ -144,7 +150,22 @@ export function SettingsContent() {
     );
   }
 
-  const school = schools[0];
+  const handleSaveSchool = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!schoolForm.nom.trim()) return;
+    setSavingSchool(true);
+    setSchoolError('');
+    setSchoolSaved(false);
+    try {
+      const updated = await updateMySchool(schoolForm);
+      setSchool(updated);
+      setSchoolSaved(true);
+    } catch (err) {
+      setSchoolError(err instanceof ApiError ? err.message : 'Échec de l\'enregistrement.');
+    } finally {
+      setSavingSchool(false);
+    }
+  };
 
   const handleCreateYear = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -355,58 +376,76 @@ export function SettingsContent() {
         })}
       </div>
 
+      {tab === 'school' && !school && (
+        <Card className="p-4 sm:p-5 max-w-2xl rounded-2xl shadow-card">
+          <p className="text-sm text-muted-foreground">Aucun établissement associé à ce compte.</p>
+        </Card>
+      )}
+
       {tab === 'school' && school && (
         <Card className="p-4 sm:p-5 max-w-2xl rounded-2xl shadow-card">
           <h3 className="font-semibold text-foreground mb-4">Informations de l'établissement</h3>
 
           <div className="flex items-center gap-4 mb-6">
             <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-primary text-primary-foreground font-bold text-3xl shrink-0">
-              {school.nom[0]}
+              {schoolForm.nom[0] ?? school.nom[0]}
             </div>
             <div className="min-w-0">
-              <Button variant="outline" size="sm" className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform">
+              <Button variant="outline" size="sm" disabled title="Bientôt disponible" className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform">
                 <Upload className="h-4 w-4" /> <span className="hidden sm:inline">Changer le logo</span>
               </Button>
               <p className="text-xs text-muted-foreground mt-1.5 truncate">JPG, PNG max 1MB</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-            <div>
-              <Label htmlFor="nom">Nom de l'établissement</Label>
-              <Input id="nom" defaultValue={school.nom} className="mt-1.5" />
-            </div>
-            <div>
-              <Label htmlFor="telephone">Téléphone</Label>
-              <Input id="telephone" defaultValue={school.telephone} className="mt-1.5" />
-            </div>
-            <div className="sm:col-span-2">
-              <Label htmlFor="adresse">Adresse</Label>
-              <Input id="adresse" defaultValue={school.adresse} className="mt-1.5" />
-            </div>
-            <div>
-              <Label htmlFor="abonnement">Abonnement</Label>
-              <div className="mt-1.5">
-                <Badge className={cn('badge-modern',
-                  school.statut_abonnement === 'actif' ? 'bg-success/10 text-success' :
-                  school.statut_abonnement === 'essai' ? 'bg-warning/10 text-warning' :
-                  'bg-destructive/10 text-destructive'
-                )}>
-                  {school.statut_abonnement === 'actif' ? 'Actif' : school.statut_abonnement === 'essai' ? 'Essai' : 'Expiré'}
-                </Badge>
+          <form onSubmit={handleSaveSchool}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              <div>
+                <Label htmlFor="nom">Nom de l'établissement</Label>
+                <Input id="nom" value={schoolForm.nom} onChange={e => setSchoolForm({ ...schoolForm, nom: e.target.value })} required className="mt-1.5" />
+              </div>
+              <div>
+                <Label htmlFor="telephone">Téléphone</Label>
+                <Input id="telephone" value={schoolForm.telephone} onChange={e => setSchoolForm({ ...schoolForm, telephone: e.target.value })} className="mt-1.5" />
+              </div>
+              <div className="sm:col-span-2">
+                <Label htmlFor="adresse">Adresse</Label>
+                <Input id="adresse" value={schoolForm.adresse} onChange={e => setSchoolForm({ ...schoolForm, adresse: e.target.value })} className="mt-1.5" />
+              </div>
+              <div>
+                <Label htmlFor="abonnement">Abonnement</Label>
+                <div className="mt-1.5">
+                  <Badge className={cn('badge-modern',
+                    school.statut_abonnement === 'actif' ? 'bg-success/10 text-success' :
+                    school.statut_abonnement === 'essai' ? 'bg-warning/10 text-warning' :
+                    'bg-destructive/10 text-destructive'
+                  )}>
+                    {school.statut_abonnement === 'actif' ? 'Actif' : school.statut_abonnement === 'essai' ? 'Essai' : 'Expiré'}
+                  </Badge>
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="dateCreation">Date de création</Label>
+                <Input id="dateCreation" defaultValue={new Date(school.date_creation).toLocaleDateString('fr-FR')} disabled className="mt-1.5" />
               </div>
             </div>
-            <div>
-              <Label htmlFor="dateCreation">Date de création</Label>
-              <Input id="dateCreation" defaultValue={new Date(school.date_creation).toLocaleDateString('fr-FR')} disabled className="mt-1.5" />
-            </div>
-          </div>
 
-          <div className="flex justify-end mt-6">
-            <Button className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform">
-              <Save className="h-4 w-4" /> <span className="hidden sm:inline">Enregistrer</span>
-            </Button>
-          </div>
+            {schoolError && (
+              <div className="mt-4 rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive animate-fade-in">{schoolError}</div>
+            )}
+            {schoolSaved && (
+              <div className="mt-4 rounded-xl bg-success/10 px-3 py-2.5 text-sm text-success animate-fade-in flex items-center gap-1.5">
+                <CheckCircle2 className="h-4 w-4" /> Enregistré.
+              </div>
+            )}
+
+            <div className="flex justify-end mt-6">
+              <Button type="submit" disabled={savingSchool} className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform">
+                {savingSchool ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                <span className="hidden sm:inline">Enregistrer</span>
+              </Button>
+            </div>
+          </form>
         </Card>
       )}
 

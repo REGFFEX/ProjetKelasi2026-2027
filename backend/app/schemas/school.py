@@ -19,6 +19,14 @@ class SchoolAdminUpdate(BaseModel):
     statut_abonnement: SubscriptionStatus | None = None
 
 
+class SchoolSelfUpdate(BaseModel):
+    """What a school_admin may edit about their own school — subscription status is platform-controlled."""
+    nom: str | None = None
+    adresse: str | None = None
+    telephone: str | None = None
+    logo: str | None = None
+
+
 class SchoolAdminOut(BaseModel):
     id: str
     nom: str
