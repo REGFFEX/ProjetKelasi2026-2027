@@ -23,7 +23,6 @@ interface StudentRow {
 interface ClassroomRow {
   id: string;
   nom: string;
-  niveau: string;
 }
 
 interface ParentRow {

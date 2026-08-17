@@ -1,7 +1,7 @@
 import enum
 from datetime import date
 
-from sqlalchemy import String, Date, Integer, Numeric, ForeignKey, CHAR, UniqueConstraint
+from sqlalchemy import String, Text, Date, Integer, Numeric, ForeignKey, CHAR, UniqueConstraint
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -28,6 +28,15 @@ class Attendance(Base, UUIDPKMixin, TimestampMixin):
     statut: Mapped[AttendanceStatus] = mapped_column(SAEnum(AttendanceStatus))
 
 
+class EvaluationType(Base, UUIDPKMixin, TimestampMixin):
+    """Configurable per school: Devoir, Interrogation, Composition, Examen, Projet, Oral, Participation..."""
+
+    __tablename__ = "evaluation_types"
+
+    school_id: Mapped[str] = mapped_column(CHAR(36), ForeignKey("schools.id", ondelete="CASCADE"), index=True)
+    nom: Mapped[str] = mapped_column(String(100))
+
+
 class Assessment(Base, UUIDPKMixin, TimestampMixin):
     __tablename__ = "assessments"
 
@@ -35,6 +44,9 @@ class Assessment(Base, UUIDPKMixin, TimestampMixin):
     subject_id: Mapped[str] = mapped_column(CHAR(36), ForeignKey("subjects.id", ondelete="CASCADE"), index=True)
     classroom_id: Mapped[str] = mapped_column(CHAR(36), ForeignKey("classrooms.id", ondelete="CASCADE"), index=True)
     term_id: Mapped[str] = mapped_column(CHAR(36), ForeignKey("terms.id", ondelete="CASCADE"), index=True)
+    evaluation_type_id: Mapped[str | None] = mapped_column(
+        CHAR(36), ForeignKey("evaluation_types.id", ondelete="SET NULL"), nullable=True
+    )
     libelle: Mapped[str] = mapped_column(String(255))
     date: Mapped[date] = mapped_column(Date)
     coefficient: Mapped[int] = mapped_column(Integer, default=1)
@@ -55,5 +67,6 @@ class Grade(Base, UUIDPKMixin, TimestampMixin):
         CHAR(36), ForeignKey("assessments.id", ondelete="CASCADE"), index=True
     )
     student_id: Mapped[str] = mapped_column(CHAR(36), ForeignKey("students.id", ondelete="CASCADE"), index=True)
-    note: Mapped[float] = mapped_column(Numeric(5, 2))
+    note: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    appreciation: Mapped[str | None] = mapped_column(Text, nullable=True)
     statut_validation: Mapped[GradeStatus] = mapped_column(SAEnum(GradeStatus), default=GradeStatus.brouillon)

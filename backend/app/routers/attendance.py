@@ -3,6 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from app.authz import assert_teacher_scope, write_audit_log
 from app.db import get_db
 from app.deps import CurrentUser, require_role
 from app.models.operations import Attendance
@@ -38,6 +39,15 @@ def upsert_attendance(
     current_user: CurrentUser = Depends(require_role(*WRITE_ROLES)),
     db: Session = Depends(get_db),
 ):
+    # Secretary has full cross-class access by design (can cover a forgotten appel).
+    # Teacher is scoped to classrooms they're actually assigned to this year.
+    if current_user.role == Role.teacher:
+        checked_classrooms: set[str] = set()
+        for record in body.records:
+            if record.classroom_id and record.classroom_id not in checked_classrooms:
+                assert_teacher_scope(db, current_user, record.classroom_id)
+                checked_classrooms.add(record.classroom_id)
+
     result = []
     for record in body.records:
         existing = (
@@ -50,8 +60,14 @@ def upsert_attendance(
             .first()
         )
         if existing:
+            old_statut = existing.statut.value
             existing.classroom_id = record.classroom_id
             existing.statut = record.statut
+            if old_statut != record.statut.value:
+                write_audit_log(
+                    db, current_user, "UPDATE_ATTENDANCE", "attendance", existing.id,
+                    old_value={"statut": old_statut}, new_value={"statut": record.statut.value},
+                )
             row = existing
         else:
             row = Attendance(

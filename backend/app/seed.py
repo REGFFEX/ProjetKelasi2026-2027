@@ -1,22 +1,22 @@
-"""Seed the database with the same demo dataset the frontend previously hardcoded
-as MOCK_* constants in lib/api.ts, so the app has realistic DRC-context data
-to run against out of the box. Run with: python -m app.seed
+"""Seed the database with a realistic DRC-context demo dataset, now reflecting
+the full Cycle -> Level -> Classroom hierarchy, year-scoped enrollments and
+teacher assignments, and configurable evaluation types. Run with: python -m app.seed
 """
 from datetime import date
 
 from app.db import SessionLocal
-from app.models.academic import AcademicYear, AcademicYearStatus
+from app.models.academic import AcademicYear, AcademicYearStatus, Term, Cycle, Level, EvaluationMode
 from app.models.finance import Invoice, InvoiceStatus, Payment, PaymentMethod, FeeType
-from app.models.operations import Assessment, Attendance, AttendanceStatus, Grade, GradeStatus
+from app.models.operations import Assessment, Attendance, AttendanceStatus, EvaluationType, Grade, GradeStatus
 from app.models.people import (
     Classroom,
+    Enrollment,
     Parent,
     Student,
     StudentParent,
     Subject,
     Teacher,
-    TeacherClassroom,
-    TeacherSubject,
+    TeacherAssignment,
 )
 from app.models.school import School, SubscriptionStatus
 from app.models.user import Role, User, UserStatus
@@ -47,18 +47,68 @@ def run() -> None:
             ("Esther Tshala", "esther.tshala@kelasi.com", "Prof@2026", Role.teacher, "+243 81 555 6666"),
             ("Jean Mukendi", "jean.mukendi@kelasi.com", "Parent@2026", Role.parent, "+243 81 234 5678"),
         ]
+        users = {}
         for nom, email, password, role, telephone in demo_users:
-            db.add(
-                User(
-                    school_id=school.id,
-                    nom=nom,
-                    email=email,
-                    password_hash=hash_password(password),
-                    telephone=telephone,
-                    role=role,
-                    statut=UserStatus.actif,
-                )
+            u = User(
+                school_id=school.id,
+                nom=nom,
+                email=email,
+                password_hash=hash_password(password),
+                telephone=telephone,
+                role=role,
+                statut=UserStatus.actif,
             )
+            db.add(u)
+            db.flush()
+            users[email] = u
+
+        # ── Academic year & term (created early — everything below hangs off it) ──
+        academic_year = AcademicYear(
+            school_id=school.id,
+            libelle="2026-2027",
+            date_debut=date(2026, 9, 1),
+            date_fin=date(2027, 7, 15),
+            statut=AcademicYearStatus.active,
+        )
+        db.add(academic_year)
+        db.flush()
+
+        term1 = Term(
+            school_id=school.id,
+            academic_year_id=academic_year.id,
+            libelle="1er Trimestre",
+            date_debut=date(2026, 9, 1),
+            date_fin=date(2026, 12, 15),
+        )
+        db.add(term1)
+        db.flush()
+
+        # ── École → Cycle → Niveau hierarchy ──
+        cycle_defs = [
+            ("Maternelle", EvaluationMode.qualitatif),
+            ("Primaire", EvaluationMode.notes),
+            ("Secondaire", EvaluationMode.notes),
+        ]
+        cycles = {}
+        for nom, mode in cycle_defs:
+            c = Cycle(school_id=school.id, nom=nom, ordre=len(cycles), evaluation_mode=mode)
+            db.add(c)
+            db.flush()
+            cycles[nom] = c
+
+        level_defs = [
+            ("1ère Maternelle", "Maternelle"),
+            ("6ème Primaire", "Primaire"),
+            ("1ère Humanités", "Secondaire"),
+            ("2ème Humanités", "Secondaire"),
+            ("4ème Humanités", "Secondaire"),
+        ]
+        levels = {}
+        for nom, cycle_nom in level_defs:
+            lvl = Level(school_id=school.id, cycle_id=cycles[cycle_nom].id, nom=nom, ordre=len(levels))
+            db.add(lvl)
+            db.flush()
+            levels[nom] = lvl
 
         subject_defs = [
             ("Mathématiques", 4),
@@ -78,98 +128,136 @@ def run() -> None:
             db.flush()
             subjects[nom] = s
 
+        evaluation_type_defs = ["Devoir", "Interrogation", "Composition", "Examen", "Projet", "Oral", "Participation"]
+        eval_types = {}
+        for nom in evaluation_type_defs:
+            et = EvaluationType(school_id=school.id, nom=nom)
+            db.add(et)
+            db.flush()
+            eval_types[nom] = et
+
         teacher_defs = [
-            ("Tshala", "Esther", "esther.tshala@kelasi.cd", "+243 81 555 6666", ["Mathématiques", "Informatique"]),
-            ("Mpeza", "David", "david.mpeza@kelasi.cd", "+243 81 999 1010", ["Français", "Anglais"]),
-            ("Nkulu", "Sarah", "sarah.nkulu@kelasi.cd", "+243 82 121 3141", ["Sciences"]),
-            ("Bakwa", "Michel", "michel.bakwa@kelasi.cd", "+243 82 343 5454", ["Histoire-Géographie"]),
-            ("Mbuyi", "Jeanne", "jeanne.mbuyi@kelasi.cd", "+243 81 565 6767", ["EPS", "Éducation artistique"]),
+            ("Tshala", "Esther", "esther.tshala@kelasi.com", "+243 81 555 6666"),
+            ("Mpeza", "David", "david.mpeza@kelasi.cd", "+243 81 999 1010"),
+            ("Nkulu", "Sarah", "sarah.nkulu@kelasi.cd", "+243 82 121 3141"),
+            ("Bakwa", "Michel", "michel.bakwa@kelasi.cd", "+243 82 343 5454"),
+            ("Mbuyi", "Jeanne", "jeanne.mbuyi@kelasi.cd", "+243 81 565 6767"),
         ]
-        teachers = []
-        for nom, prenom, email, tel, subj_noms in teacher_defs:
-            t = Teacher(school_id=school.id, nom=nom, prenom=prenom, email=email, telephone=tel)
+        teachers = {}
+        for nom, prenom, email, tel in teacher_defs:
+            t = Teacher(
+                school_id=school.id,
+                user_id=users.get(email).id if email in users else None,
+                nom=nom,
+                prenom=prenom,
+                email=email,
+                telephone=tel,
+            )
             db.add(t)
             db.flush()
-            for sn in subj_noms:
-                db.add(TeacherSubject(teacher_id=t.id, subject_id=subjects[sn].id))
-            teachers.append(t)
+            teachers[prenom] = t
 
         classroom_defs = [
-            ("Maternelle", "1ère Maternelle", "Salle M1", teachers[0]),
-            ("Primaire", "6ème Primaire A", "Salle P6A", teachers[1]),
-            ("Primaire", "6ème Primaire B", "Salle P6B", teachers[2]),
-            ("Secondaire", "1ère Humanités Math-Physique", "Salle H1MP", teachers[0]),
-            ("Secondaire", "2ème Humanités Littéraire", "Salle H2L", teachers[3]),
-            ("Secondaire", "4ème Humanités Chim-Bio", "Salle H4CB", teachers[4]),
+            ("1ère Maternelle", "1ère Maternelle", "Salle M1", "Jeanne", None),
+            ("6ème Primaire", "6ème Primaire A", "Salle P6A", "Esther", None),
+            ("6ème Primaire", "6ème Primaire B", "Salle P6B", "Sarah", None),
+            ("1ère Humanités", "1ère Humanités Math-Physique", "Salle H1MP", "Esther", "Math-Physique"),
+            ("2ème Humanités", "2ème Humanités Littéraire", "Salle H2L", "Michel", "Littéraire"),
+            ("4ème Humanités", "4ème Humanités Chim-Bio", "Salle H4CB", "David", "Chimie-Biologie"),
         ]
         classrooms = []
-        for niveau, nom, salle, principal in classroom_defs:
+        for level_nom, nom, salle, principal_prenom, filiere in classroom_defs:
             c = Classroom(
-                school_id=school.id, niveau=niveau, nom=nom, salle=salle, enseignant_principal_id=principal.id
+                school_id=school.id,
+                level_id=levels[level_nom].id,
+                nom=nom,
+                salle=salle,
+                filiere=filiere,
+                enseignant_principal_id=teachers[principal_prenom].id,
             )
             db.add(c)
             db.flush()
-            db.add(TeacherClassroom(teacher_id=principal.id, classroom_id=c.id))
             classrooms.append(c)
+        classroom_by_nom = {c.nom: c for c in classrooms}
+
+        # ── Teacher assignments: precise (teacher, subject, classroom, year) triples ──
+        assignment_defs = [
+            ("Esther", "Mathématiques", "6ème Primaire A"),
+            ("Esther", "Mathématiques", "1ère Humanités Math-Physique"),
+            ("Esther", "Informatique", "1ère Humanités Math-Physique"),
+            ("David", "Français", "6ème Primaire A"),
+            ("David", "Français", "6ème Primaire B"),
+            ("David", "Anglais", "4ème Humanités Chim-Bio"),
+            ("Sarah", "Sciences", "6ème Primaire A"),
+            ("Sarah", "Sciences", "6ème Primaire B"),
+            ("Sarah", "Sciences", "4ème Humanités Chim-Bio"),
+            ("Michel", "Histoire-Géographie", "2ème Humanités Littéraire"),
+            ("Michel", "Histoire-Géographie", "1ère Humanités Math-Physique"),
+            ("Jeanne", "EPS", "1ère Humanités Math-Physique"),
+            ("Jeanne", "Éducation artistique", "1ère Maternelle"),
+        ]
+        for prenom, subject_nom, classroom_nom in assignment_defs:
+            db.add(
+                TeacherAssignment(
+                    school_id=school.id,
+                    teacher_id=teachers[prenom].id,
+                    subject_id=subjects[subject_nom].id,
+                    classroom_id=classroom_by_nom[classroom_nom].id,
+                    academic_year_id=academic_year.id,
+                )
+            )
 
         parent_defs = [
-            ("Jean Mukendi", "+243 81 234 5678", "jean.m@gmail.com", "Matonge, Kinshasa", "Commerçant"),
-            ("Adèle Kabongo", "+243 82 345 6789", "adele.k@gmail.com", "Lemba, Kinshasa", "Infirmière"),
-            ("Félix Mwamba", "+243 85 456 7890", "felix.m@gmail.com", "Bandalungwa, Kinshasa", "Chauffeur"),
-            ("Claire Ntumba", "+243 89 567 8901", "claire.n@gmail.com", "Ngaliema, Kinshasa", "Enseignante"),
-            ("Patrick Ilunga", "+243 81 678 9012", "patrick.i@gmail.com", "Kintambo, Kinshasa", "Mécanicien"),
+            ("Jean Mukendi", "+243 81 234 5678", "jean.m@gmail.com", "Matonge, Kinshasa", "Commerçant", "jean.mukendi@kelasi.com"),
+            ("Adèle Kabongo", "+243 82 345 6789", "adele.k@gmail.com", "Lemba, Kinshasa", "Infirmière", None),
+            ("Félix Mwamba", "+243 85 456 7890", "felix.m@gmail.com", "Bandalungwa, Kinshasa", "Chauffeur", None),
+            ("Claire Ntumba", "+243 89 567 8901", "claire.n@gmail.com", "Ngaliema, Kinshasa", "Enseignante", None),
+            ("Patrick Ilunga", "+243 81 678 9012", "patrick.i@gmail.com", "Kintambo, Kinshasa", "Mécanicien", None),
         ]
         parents = []
-        for nom, tel, email, adresse, profession in parent_defs:
-            p = Parent(school_id=school.id, nom=nom, telephone=tel, email=email, adresse=adresse, profession=profession)
+        for nom, tel, email, adresse, profession, user_email in parent_defs:
+            p = Parent(
+                school_id=school.id,
+                user_id=users[user_email].id if user_email else None,
+                nom=nom,
+                telephone=tel,
+                email=email,
+                adresse=adresse,
+                profession=profession,
+            )
             db.add(p)
             db.flush()
             parents.append(p)
 
         student_defs = [
-            ("MAT-2026-001", "Mukendi", "Aimé", date(2015, 3, 12), classrooms[1], parents[0]),
-            ("MAT-2026-002", "Kabongo", "Béatrice", date(2015, 7, 22), classrooms[1], parents[1]),
-            ("MAT-2026-003", "Mwamba", "Christian", date(2014, 11, 5), classrooms[2], parents[2]),
-            ("MAT-2026-004", "Ntumba", "Divine", date(2015, 1, 18), classrooms[1], parents[3]),
-            ("MAT-2026-005", "Ilunga", "Emmanuel", date(2012, 9, 30), classrooms[3], parents[4]),
+            ("MAT-2026-001", "Mukendi", "Aimé", date(2015, 3, 12), "6ème Primaire A", parents[0]),
+            ("MAT-2026-002", "Kabongo", "Béatrice", date(2015, 7, 22), "6ème Primaire A", parents[1]),
+            ("MAT-2026-003", "Mwamba", "Christian", date(2014, 11, 5), "6ème Primaire B", parents[2]),
+            ("MAT-2026-004", "Ntumba", "Divine", date(2015, 1, 18), "6ème Primaire A", parents[3]),
+            ("MAT-2026-005", "Ilunga", "Emmanuel", date(2012, 9, 30), "4ème Humanités Chim-Bio", parents[4]),
         ]
         students = []
-        for matricule, nom, prenom, dob, classroom, parent in student_defs:
+        for matricule, nom, prenom, dob, classroom_nom, parent in student_defs:
             st = Student(
                 school_id=school.id,
                 matricule=matricule,
                 nom=nom,
                 prenom=prenom,
                 date_naissance=dob,
-                classroom_id=classroom.id,
                 statut=UserStatus.actif,
             )
             db.add(st)
             db.flush()
+            db.add(
+                Enrollment(
+                    school_id=school.id,
+                    student_id=st.id,
+                    classroom_id=classroom_by_nom[classroom_nom].id,
+                    academic_year_id=academic_year.id,
+                )
+            )
             db.add(StudentParent(school_id=school.id, student_id=st.id, parent_id=parent.id))
             students.append(st)
-
-        academic_year = AcademicYear(
-            school_id=school.id,
-            libelle="2026-2027",
-            date_debut=date(2026, 9, 1),
-            date_fin=date(2027, 7, 15),
-            statut=AcademicYearStatus.active,
-        )
-        db.add(academic_year)
-        db.flush()
-
-        from app.models.academic import Term
-
-        term1 = Term(
-            school_id=school.id,
-            academic_year_id=academic_year.id,
-            libelle="1er Trimestre",
-            date_debut=date(2026, 9, 1),
-            date_fin=date(2026, 12, 15),
-        )
-        db.add(term1)
-        db.flush()
 
         today = date.today()
         for idx, st in enumerate(students):
@@ -182,28 +270,32 @@ def run() -> None:
                 if idx % 9 == 0
                 else AttendanceStatus.present
             )
+            enrolled_classroom_id = classroom_by_nom[student_defs[idx][4]].id
             db.add(
                 Attendance(
                     school_id=school.id,
                     student_id=st.id,
-                    classroom_id=st.classroom_id,
+                    classroom_id=enrolled_classroom_id,
                     date=today,
                     statut=statut,
                 )
             )
 
+        # Assessments only for classrooms/subjects an assignment actually covers,
+        # so the teacher-scoping demo (Esther) has real, gradeable data.
         assessment_defs = [
-            (subjects["Mathématiques"], classrooms[1], "Interrogation Math 1", 1),
-            (subjects["Français"], classrooms[1], "Examen Français T1", 2),
-            (subjects["Sciences"], classrooms[3], "TP Physique-Chimie", 1),
+            (subjects["Mathématiques"], classroom_by_nom["6ème Primaire A"], eval_types["Interrogation"], "Interrogation Math 1", 1),
+            (subjects["Français"], classroom_by_nom["6ème Primaire A"], eval_types["Examen"], "Examen Français T1", 2),
+            (subjects["Sciences"], classroom_by_nom["4ème Humanités Chim-Bio"], eval_types["Projet"], "TP Physique-Chimie", 1),
         ]
         assessments = []
-        for subject, classroom, libelle, coeff in assessment_defs:
+        for subject, classroom, eval_type, libelle, coeff in assessment_defs:
             a = Assessment(
                 school_id=school.id,
                 subject_id=subject.id,
                 classroom_id=classroom.id,
                 term_id=term1.id,
+                evaluation_type_id=eval_type.id,
                 libelle=libelle,
                 date=today,
                 coefficient=coeff,

@@ -10,7 +10,7 @@ from app.schemas.classrooms import SubjectCreate, SubjectUpdate, SubjectOut
 
 router = APIRouter(prefix="/subjects", tags=["subjects"])
 
-READ_ROLES = (Role.school_admin, Role.secretary, Role.accountant, Role.teacher)
+READ_ROLES = (Role.school_admin, Role.secretary, Role.accountant, Role.teacher, Role.parent)
 WRITE_ROLES = (Role.school_admin,)
 
 

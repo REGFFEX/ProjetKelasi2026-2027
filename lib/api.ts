@@ -46,12 +46,29 @@ export interface DbTeacher {
   statut: string;
 }
 
+export interface DbCycle {
+  id: string;
+  school_id: string;
+  nom: string;
+  ordre: number;
+  evaluation_mode: 'notes' | 'qualitatif';
+}
+
+export interface DbLevel {
+  id: string;
+  school_id: string;
+  cycle_id: string;
+  nom: string;
+  ordre: number;
+}
+
 export interface DbClassroom {
   id: string;
   school_id: string;
-  niveau: string;
+  level_id: string;
   nom: string;
   salle: string;
+  filiere: string | null;
   enseignant_principal_id: string | null;
 }
 
@@ -60,6 +77,21 @@ export interface DbSubject {
   school_id: string;
   nom: string;
   coefficient: number;
+}
+
+export interface DbEvaluationType {
+  id: string;
+  school_id: string;
+  nom: string;
+}
+
+export interface DbTeacherAssignment {
+  id: string;
+  school_id: string;
+  teacher_id: string;
+  subject_id: string;
+  classroom_id: string;
+  academic_year_id: string;
 }
 
 export interface DbAttendance {
@@ -77,6 +109,7 @@ export interface DbAssessment {
   subject_id: string;
   classroom_id: string;
   term_id: string;
+  evaluation_type_id: string | null;
   libelle: string;
   date: string;
   coefficient: number;
@@ -87,7 +120,8 @@ export interface DbGrade {
   school_id: string;
   assessment_id: string;
   student_id: string;
-  note: number;
+  note: number | null;
+  appreciation: string | null;
   statut_validation: string;
 }
 
@@ -119,7 +153,16 @@ export interface DbAcademicYear {
   libelle: string;
   date_debut: string;
   date_fin: string;
-  statut: string;
+  statut: 'active' | 'archivee';
+}
+
+export interface DbTerm {
+  id: string;
+  school_id: string;
+  academic_year_id: string;
+  libelle: string;
+  date_debut: string;
+  date_fin: string;
 }
 
 export interface DbStudentParent {
@@ -181,12 +224,37 @@ export const updateParent = (id: string, updates: Partial<ParentInput>) =>
   apiPatch<DbParent>(`/parents/${id}`, updates);
 export const deleteParent = (id: string) => apiDelete<void>(`/parents/${id}`);
 
+// ── Cycles & Levels (École → Cycle → Niveau) ─────────────────
+
+export interface CycleInput {
+  nom: string;
+  ordre?: number;
+  evaluation_mode?: 'notes' | 'qualitatif';
+}
+
+export const fetchCycles = () => apiGet<DbCycle[]>('/cycles');
+export const createCycle = (cycle: CycleInput) => apiPost<DbCycle>('/cycles', cycle);
+export const updateCycle = (id: string, updates: Partial<CycleInput>) => apiPatch<DbCycle>(`/cycles/${id}`, updates);
+export const deleteCycle = (id: string) => apiDelete<void>(`/cycles/${id}`);
+
+export interface LevelInput {
+  cycle_id: string;
+  nom: string;
+  ordre?: number;
+}
+
+export const fetchLevels = () => apiGet<DbLevel[]>('/levels');
+export const createLevel = (level: LevelInput) => apiPost<DbLevel>('/levels', level);
+export const updateLevel = (id: string, updates: Partial<LevelInput>) => apiPatch<DbLevel>(`/levels/${id}`, updates);
+export const deleteLevel = (id: string) => apiDelete<void>(`/levels/${id}`);
+
 // ── Classrooms & Subjects ────────────────────────────────────
 
 export interface ClassroomInput {
-  niveau: string;
+  level_id: string;
   nom: string;
   salle?: string;
+  filiere?: string | null;
   enseignant_principal_id?: string | null;
 }
 
@@ -209,14 +277,18 @@ export const deleteSubject = (id: string) => apiDelete<void>(`/subjects/${id}`);
 
 // ── Teachers ──────────────────────────────────────────────────
 
+export interface AssignmentPairInput {
+  subject_id: string;
+  classroom_id: string;
+}
+
 export interface TeacherInput {
   nom: string;
   prenom: string;
   email: string;
   telephone?: string;
   statut?: 'actif' | 'inactif';
-  matiere_ids?: string[];
-  classroom_ids?: string[];
+  assignments?: AssignmentPairInput[];
 }
 
 export const fetchTeachers = () => apiGet<DbTeacher[]>('/teachers');
@@ -224,6 +296,14 @@ export const createTeacher = (teacher: TeacherInput) => apiPost<DbTeacher>('/tea
 export const updateTeacher = (id: string, updates: Partial<TeacherInput>) =>
   apiPatch<DbTeacher>(`/teachers/${id}`, updates);
 export const deleteTeacher = (id: string) => apiDelete<void>(`/teachers/${id}`);
+
+// ── Teacher assignments (standalone management) ──────────────
+
+export const fetchAssignments = (teacherId?: string) =>
+  apiGet<DbTeacherAssignment[]>(`/assignments${teacherId ? `?teacher_id=${teacherId}` : ''}`);
+export const createAssignment = (assignment: { teacher_id: string; subject_id: string; classroom_id: string; academic_year_id?: string }) =>
+  apiPost<DbTeacherAssignment>('/assignments', assignment);
+export const deleteAssignment = (id: string) => apiDelete<void>(`/assignments/${id}`);
 
 // ── Attendance ────────────────────────────────────────────────
 
@@ -245,12 +325,16 @@ export function fetchAttendance(params?: { classroom_id?: string; date?: string 
 export const upsertAttendance = (records: AttendanceRecordInput[]) =>
   apiPut<DbAttendance[]>('/attendance', { records });
 
-// ── Assessments & Grades ─────────────────────────────────────
+// ── Evaluation types, Assessments & Grades ───────────────────
+
+export const fetchEvaluationTypes = () => apiGet<DbEvaluationType[]>('/evaluation-types');
+export const createEvaluationType = (nom: string) => apiPost<DbEvaluationType>('/evaluation-types', { nom });
 
 export interface AssessmentInput {
   subject_id: string;
   classroom_id: string;
   term_id: string;
+  evaluation_type_id?: string | null;
   libelle: string;
   date: string;
   coefficient?: number;
@@ -262,7 +346,8 @@ export const createAssessment = (assessment: AssessmentInput) => apiPost<DbAsses
 export interface GradeRecordInput {
   assessment_id: string;
   student_id: string;
-  note: number;
+  note?: number | null;
+  appreciation?: string | null;
   statut_validation?: 'brouillon' | 'valide' | 'publie';
 }
 
@@ -299,6 +384,13 @@ export const createPayment = (payment: PaymentInput) =>
 // ── Academic years / staff / schools ─────────────────────────
 
 export const fetchAcademicYears = () => apiGet<DbAcademicYear[]>('/academic-years');
+export const createAcademicYear = (year: { libelle: string; date_debut: string; date_fin: string; activate?: boolean }) =>
+  apiPost<DbAcademicYear>('/academic-years', year);
+export const activateAcademicYear = (id: string) => apiPost<DbAcademicYear>(`/academic-years/${id}/activate`);
+export const fetchTerms = () => apiGet<DbTerm[]>('/academic-years/terms');
+export const createTerm = (term: { academic_year_id: string; libelle: string; date_debut: string; date_fin: string }) =>
+  apiPost<DbTerm>('/academic-years/terms', term);
+
 export const fetchUsers = () => apiGet<DbUser[]>('/users');
 
 export async function fetchSchools(): Promise<DbSchool[]> {
@@ -313,6 +405,19 @@ export async function fetchSchools(): Promise<DbSchool[]> {
     date_creation: '',
   }));
 }
+
+// ── Parent portal (scoped to the logged-in parent's own children) ──
+
+export const fetchMyChildren = () => apiGet<DbStudent[]>('/parent/children');
+export const fetchChildGrades = (studentId: string) => apiGet<DbGrade[]>(`/parent/children/${studentId}/grades`);
+export const fetchChildAssessments = (studentId: string) =>
+  apiGet<DbAssessment[]>(`/parent/children/${studentId}/assessments`);
+export const fetchChildAttendance = (studentId: string) =>
+  apiGet<DbAttendance[]>(`/parent/children/${studentId}/attendance`);
+export const fetchChildInvoices = (studentId: string) =>
+  apiGet<DbInvoice[]>(`/parent/children/${studentId}/invoices`);
+export const fetchChildPayments = (studentId: string) =>
+  apiGet<DbPayment[]>(`/parent/children/${studentId}/payments`);
 
 // Communication module is deferred (out of scope for this pass) — no backend routes yet.
 export const fetchNotifications = async () => [] as {

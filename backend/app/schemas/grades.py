@@ -5,10 +5,23 @@ from pydantic import BaseModel, Field
 from app.models.operations import GradeStatus
 
 
+class EvaluationTypeCreate(BaseModel):
+    nom: str
+
+
+class EvaluationTypeOut(BaseModel):
+    id: str
+    school_id: str
+    nom: str
+
+    model_config = {"from_attributes": True}
+
+
 class AssessmentCreate(BaseModel):
     subject_id: str
     classroom_id: str
     term_id: str
+    evaluation_type_id: str | None = None
     libelle: str
     date: date
     coefficient: int = 1
@@ -20,6 +33,7 @@ class AssessmentOut(BaseModel):
     subject_id: str
     classroom_id: str
     term_id: str
+    evaluation_type_id: str | None = None
     libelle: str
     date: date
     coefficient: int
@@ -30,7 +44,8 @@ class AssessmentOut(BaseModel):
 class GradeRecord(BaseModel):
     assessment_id: str
     student_id: str
-    note: float = Field(ge=0, le=20)
+    note: float | None = Field(default=None, ge=0, le=20)
+    appreciation: str | None = None
     statut_validation: GradeStatus = GradeStatus.brouillon
 
 
@@ -43,7 +58,8 @@ class GradeOut(BaseModel):
     school_id: str
     assessment_id: str
     student_id: str
-    note: float
+    note: float | None = None
+    appreciation: str | None = None
     statut_validation: GradeStatus
 
     model_config = {"from_attributes": True}

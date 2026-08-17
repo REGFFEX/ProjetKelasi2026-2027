@@ -99,9 +99,10 @@ export function StudentDetailContent({ studentId }: { studentId: string }) {
   const studentPayments = payments.filter(p => studentInvoices.some(inv => inv.id === p.invoice_id));
   const studentAttendance = attendance.filter(a => a.student_id === student.id);
   const studentGrades = grades.filter(g => g.student_id === student.id);
+  const notedStudentGrades = studentGrades.filter((g): g is typeof g & { note: number } => g.note !== null);
 
-  const avgGrade = studentGrades.length > 0
-    ? (studentGrades.reduce((sum, g) => sum + g.note, 0) / studentGrades.length).toFixed(2)
+  const avgGrade = notedStudentGrades.length > 0
+    ? (notedStudentGrades.reduce((sum, g) => sum + g.note, 0) / notedStudentGrades.length).toFixed(2)
     : '—';
 
   const totalPaid = studentInvoices.reduce((sum, inv) => sum + inv.montant_paye, 0);
@@ -248,11 +249,16 @@ export function StudentDetailContent({ studentId }: { studentId: string }) {
                         <p className="text-xs text-muted-foreground truncate">{getSubjectName(assessment.subject_id)} · Coef. {assessment.coefficient}</p>
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
-                        <span className={cn(
-                          'text-lg font-bold',
-                          g.note >= 10 ? 'text-success' : 'text-destructive'
-                        )}>{g.note}</span>
-                        <span className="text-xs text-muted-foreground">/20</span>
+                        {g.note !== null ? (
+                          <>
+                            <span className={cn('text-lg font-bold', g.note >= 10 ? 'text-success' : 'text-destructive')}>
+                              {g.note}
+                            </span>
+                            <span className="text-xs text-muted-foreground">/20</span>
+                          </>
+                        ) : (
+                          <span className="text-sm italic text-muted-foreground">{g.appreciation || '—'}</span>
+                        )}
                       </div>
                     </div>
                   );

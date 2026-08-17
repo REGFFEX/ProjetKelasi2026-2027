@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { ClipboardList, Plus, Eye, CheckCircle, Clock, FileText, Download, Send, ArrowLeft, Save, Loader2 } from 'lucide-react';
-import { fetchAssessments, fetchSubjects, fetchClassrooms, fetchStudents, fetchGrades, upsertGrades } from '@/lib/api';
+import { fetchAssessments, fetchSubjects, fetchClassrooms, fetchStudents, fetchGrades, fetchCycles, fetchLevels, upsertGrades } from '@/lib/api';
+import { ApiError } from '@/lib/api-client';
 import type { GradeStatus } from '@/lib/types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,6 +26,7 @@ export function GradesContent() {
   const [bulletinStudentId, setBulletinStudentId] = useState<string | null>(null);
   const [gradeValues, setGradeValues] = useState<Record<string, string>>({});
   const [savingGrades, setSavingGrades] = useState(false);
+  const [gradesError, setGradesError] = useState('');
 
   const [loading, setLoading] = useState(true);
   const [assessments, setAssessments] = useState<Awaited<ReturnType<typeof fetchAssessments>>>([]);
@@ -32,17 +34,21 @@ export function GradesContent() {
   const [classrooms, setClassrooms] = useState<Awaited<ReturnType<typeof fetchClassrooms>>>([]);
   const [students, setStudents] = useState<Awaited<ReturnType<typeof fetchStudents>>>([]);
   const [grades, setGrades] = useState<Awaited<ReturnType<typeof fetchGrades>>>([]);
+  const [cycles, setCycles] = useState<Awaited<ReturnType<typeof fetchCycles>>>([]);
+  const [levels, setLevels] = useState<Awaited<ReturnType<typeof fetchLevels>>>([]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [a, s, c, st, g] = await Promise.all([
+        const [a, s, c, st, g, cyc, lvl] = await Promise.all([
           fetchAssessments(),
           fetchSubjects(),
           fetchClassrooms(),
           fetchStudents(),
           fetchGrades(),
+          fetchCycles(),
+          fetchLevels(),
         ]);
         if (cancelled) return;
         setAssessments(a);
@@ -50,6 +56,8 @@ export function GradesContent() {
         setClassrooms(c);
         setStudents(st);
         setGrades(g);
+        setCycles(cyc);
+        setLevels(lvl);
       } catch (e) {
         console.error('Failed to load grades data:', e);
       } finally {
@@ -58,6 +66,13 @@ export function GradesContent() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  const isQualitatif = (classroomId: string) => {
+    const classroom = classrooms.find(c => c.id === classroomId);
+    const level = classroom ? levels.find(l => l.id === classroom.level_id) : undefined;
+    const cycle = level ? cycles.find(cy => cy.id === level.cycle_id) : undefined;
+    return cycle?.evaluation_mode === 'qualitatif';
+  };
 
   const getSubjectName = (id: string) => subjects.find(s => s.id === id)?.nom || 'Inconnu';
   const getClassroomName = (id: string) => classrooms.find(c => c.id === id)?.nom || 'Inconnu';
@@ -142,8 +157,9 @@ export function GradesContent() {
             const status = (assessmentGrades[0]?.statut_validation || 'brouillon') as GradeStatus;
             const cfg = statusConfig[status];
             const Icon = cfg.icon;
-            const avg = assessmentGrades.length > 0
-              ? (assessmentGrades.reduce((sum, g) => sum + g.note, 0) / assessmentGrades.length).toFixed(1)
+            const notedGrades = assessmentGrades.filter((g): g is typeof g & { note: number } => g.note !== null);
+            const avg = notedGrades.length > 0
+              ? (notedGrades.reduce((sum, g) => sum + g.note, 0) / notedGrades.length).toFixed(1)
               : '—';
 
             return (
@@ -212,24 +228,58 @@ export function GradesContent() {
     const assessment = assessments.find(a => a.id === selectedAssessment);
     if (!assessment) return null;
     const classStudents = students.filter(s => s.classroom_id === assessment.classroom_id);
+    const qualitatif = isQualitatif(assessment.classroom_id);
+
+    const applySaved = (saved: Awaited<ReturnType<typeof upsertGrades>>) => {
+      setGrades(prev => {
+        const savedStudentIds = new Set(saved.map(g => g.student_id));
+        const others = prev.filter(g => !(g.assessment_id === assessment.id && savedStudentIds.has(g.student_id)));
+        return [...others, ...saved];
+      });
+    };
 
     const handleSaveGrades = async () => {
-      const records = classStudents
-        .map(s => ({ student_id: s.id, raw: gradeValues[s.id] }))
-        .filter(r => r.raw !== undefined && r.raw !== '' && !isNaN(parseFloat(r.raw)) && parseFloat(r.raw) >= 0 && parseFloat(r.raw) <= 20)
-        .map(r => ({ assessment_id: assessment.id, student_id: r.student_id, note: parseFloat(r.raw) }));
+      setGradesError('');
+      const records = qualitatif
+        ? classStudents
+            .map(s => ({ student_id: s.id, raw: gradeValues[s.id] }))
+            .filter(r => r.raw !== undefined && r.raw.trim() !== '')
+            .map(r => ({ assessment_id: assessment.id, student_id: r.student_id, appreciation: r.raw }))
+        : classStudents
+            .map(s => ({ student_id: s.id, raw: gradeValues[s.id] }))
+            .filter(r => r.raw !== undefined && r.raw !== '' && !isNaN(parseFloat(r.raw)) && parseFloat(r.raw) >= 0 && parseFloat(r.raw) <= 20)
+            .map(r => ({ assessment_id: assessment.id, student_id: r.student_id, note: parseFloat(r.raw) }));
 
       if (records.length === 0) return;
       setSavingGrades(true);
       try {
-        const saved = await upsertGrades(records);
-        setGrades(prev => {
-          const savedStudentIds = new Set(saved.map(g => g.student_id));
-          const others = prev.filter(g => !(g.assessment_id === assessment.id && savedStudentIds.has(g.student_id)));
-          return [...others, ...saved];
-        });
+        applySaved(await upsertGrades(records));
       } catch (e) {
-        console.error('Failed to save grades:', e);
+        setGradesError(e instanceof ApiError ? e.message : 'Échec de l\'enregistrement des notes.');
+      } finally {
+        setSavingGrades(false);
+      }
+    };
+
+    const handleSetStatus = async (statut: 'valide' | 'publie') => {
+      const existing = grades.filter(g => g.assessment_id === assessment.id);
+      if (existing.length === 0) {
+        setGradesError('Aucune note enregistrée pour cette évaluation.');
+        return;
+      }
+      setGradesError('');
+      setSavingGrades(true);
+      try {
+        const records = existing.map(g => ({
+          assessment_id: g.assessment_id,
+          student_id: g.student_id,
+          note: g.note,
+          appreciation: g.appreciation,
+          statut_validation: statut,
+        }));
+        applySaved(await upsertGrades(records));
+      } catch (e) {
+        setGradesError(e instanceof ApiError ? e.message : 'Échec de la mise à jour du statut.');
       } finally {
         setSavingGrades(false);
       }
@@ -249,16 +299,24 @@ export function GradesContent() {
 
         <Card className="p-4 sm:p-5 rounded-2xl shadow-card">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-foreground text-sm sm:text-base">Saisie des notes</h3>
+            <h3 className="font-semibold text-foreground text-sm sm:text-base">
+              Saisie des {qualitatif ? 'appréciations' : 'notes'}
+            </h3>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" className="gap-1.5 rounded-xl active:scale-95 transition-all">
+              <Button variant="outline" size="sm" disabled={savingGrades} onClick={() => handleSetStatus('valide')} className="gap-1.5 rounded-xl active:scale-95 transition-all">
                 <CheckCircle className="h-4 w-4" /> <span className="hidden sm:inline">Valider</span>
               </Button>
-              <Button size="sm" className="gap-1.5 rounded-xl active:scale-95 transition-all">
+              <Button size="sm" disabled={savingGrades} onClick={() => handleSetStatus('publie')} className="gap-1.5 rounded-xl active:scale-95 transition-all">
                 <Send className="h-4 w-4" /> <span className="hidden sm:inline">Publier</span>
               </Button>
             </div>
           </div>
+
+          {gradesError && (
+            <div className="mb-4 rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive animate-fade-in">
+              {gradesError}
+            </div>
+          )}
 
           <div className="space-y-2 max-h-[500px] overflow-y-auto scrollbar-thin">
             {classStudents.map((s, idx) => {
@@ -275,6 +333,15 @@ export function GradesContent() {
                     <p className="text-sm font-medium text-foreground truncate">{s.prenom} {s.nom}</p>
                     <p className="text-xs text-muted-foreground truncate hidden sm:block">{s.matricule}</p>
                   </div>
+                  {qualitatif ? (
+                    <textarea
+                      value={value}
+                      onChange={e => setGradeValues(prev => ({ ...prev, [s.id]: e.target.value }))}
+                      placeholder="Appréciation..."
+                      rows={1}
+                      className="flex-1 min-w-0 max-w-[240px] rounded-xl border border-input bg-background px-3 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 transition-all resize-none"
+                    />
+                  ) : (
                   <div className="flex items-center gap-2 shrink-0">
                     <Input
                       type="number"
@@ -293,6 +360,7 @@ export function GradesContent() {
                     />
                     <span className="text-sm text-muted-foreground hidden sm:inline">/20</span>
                   </div>
+                  )}
                 </div>
               );
             })}
@@ -322,7 +390,7 @@ export function GradesContent() {
     const gradesBySubject: Record<string, { grades: typeof studentGrades; total: number; count: number; coef: number }> = {};
     studentGrades.forEach(g => {
       const assessment = assessments.find(a => a.id === g.assessment_id);
-      if (!assessment) return;
+      if (!assessment || g.note === null) return;
       if (!gradesBySubject[assessment.subject_id]) {
         const subject = subjects.find(s => s.id === assessment.subject_id);
         gradesBySubject[assessment.subject_id] = { grades: [], total: 0, count: 0, coef: subject?.coefficient || 1 };

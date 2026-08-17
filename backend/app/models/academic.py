@@ -1,7 +1,7 @@
 import enum
 from datetime import date
 
-from sqlalchemy import String, Date, ForeignKey, CHAR
+from sqlalchemy import String, Date, Integer, ForeignKey, CHAR
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -33,3 +33,30 @@ class Term(Base, UUIDPKMixin, TimestampMixin):
     libelle: Mapped[str] = mapped_column(String(50))
     date_debut: Mapped[date] = mapped_column(Date)
     date_fin: Mapped[date] = mapped_column(Date)
+
+
+class EvaluationMode(str, enum.Enum):
+    notes = "notes"
+    qualitatif = "qualitatif"
+
+
+class Cycle(Base, UUIDPKMixin, TimestampMixin):
+    """École → Cycle (Préscolaire/Primaire/Collège/Lycée) — configurable per school."""
+
+    __tablename__ = "cycles"
+
+    school_id: Mapped[str] = mapped_column(CHAR(36), ForeignKey("schools.id", ondelete="CASCADE"), index=True)
+    nom: Mapped[str] = mapped_column(String(100))
+    ordre: Mapped[int] = mapped_column(Integer, default=0)
+    evaluation_mode: Mapped[EvaluationMode] = mapped_column(SAEnum(EvaluationMode), default=EvaluationMode.notes)
+
+
+class Level(Base, UUIDPKMixin, TimestampMixin):
+    """Cycle → Niveau (CP, 6e, Terminale...) — configurable per school."""
+
+    __tablename__ = "levels"
+
+    school_id: Mapped[str] = mapped_column(CHAR(36), ForeignKey("schools.id", ondelete="CASCADE"), index=True)
+    cycle_id: Mapped[str] = mapped_column(CHAR(36), ForeignKey("cycles.id", ondelete="CASCADE"), index=True)
+    nom: Mapped[str] = mapped_column(String(100))
+    ordre: Mapped[int] = mapped_column(Integer, default=0)

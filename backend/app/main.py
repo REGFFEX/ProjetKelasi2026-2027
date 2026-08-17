@@ -15,6 +15,11 @@ from app.routers import (
     invoices,
     payments,
     misc,
+    cycles,
+    levels,
+    academic_years,
+    assignments,
+    parent,
 )
 
 app = FastAPI(title="Kelasi API")
@@ -41,6 +46,11 @@ app.include_router(grades.router, prefix=API_PREFIX)
 app.include_router(invoices.router, prefix=API_PREFIX)
 app.include_router(payments.router, prefix=API_PREFIX)
 app.include_router(misc.router, prefix=API_PREFIX)
+app.include_router(cycles.router, prefix=API_PREFIX)
+app.include_router(levels.router, prefix=API_PREFIX)
+app.include_router(academic_years.router, prefix=API_PREFIX)
+app.include_router(assignments.router, prefix=API_PREFIX)
+app.include_router(parent.router, prefix=API_PREFIX)
 
 
 @app.get("/health")

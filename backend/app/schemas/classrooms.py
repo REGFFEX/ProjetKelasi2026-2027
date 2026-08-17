@@ -2,25 +2,28 @@ from pydantic import BaseModel
 
 
 class ClassroomCreate(BaseModel):
-    niveau: str
+    level_id: str
     nom: str
     salle: str = ""
+    filiere: str | None = None
     enseignant_principal_id: str | None = None
 
 
 class ClassroomUpdate(BaseModel):
-    niveau: str | None = None
+    level_id: str | None = None
     nom: str | None = None
     salle: str | None = None
+    filiere: str | None = None
     enseignant_principal_id: str | None = None
 
 
 class ClassroomOut(BaseModel):
     id: str
     school_id: str
-    niveau: str
+    level_id: str
     nom: str
     salle: str
+    filiere: str | None = None
     enseignant_principal_id: str | None = None
 
     model_config = {"from_attributes": True}

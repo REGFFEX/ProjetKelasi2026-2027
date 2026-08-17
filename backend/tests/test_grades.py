@@ -1,6 +1,6 @@
 from datetime import date
 
-from app.models.academic import AcademicYear, AcademicYearStatus, Term
+from app.models.academic import AcademicYear, AcademicYearStatus, Cycle, EvaluationMode, Level, Term
 from app.models.school import School
 
 
@@ -47,15 +47,27 @@ def make_term(db_session, school: School) -> str:
     return term.id
 
 
+def make_level(db_session, school: School) -> str:
+    cycle = Cycle(school_id=school.id, nom="Primaire", ordre=0, evaluation_mode=EvaluationMode.notes)
+    db_session.add(cycle)
+    db_session.flush()
+    level = Level(school_id=school.id, cycle_id=cycle.id, nom="6ème", ordre=0)
+    db_session.add(level)
+    db_session.commit()
+    db_session.refresh(level)
+    return level.id
+
+
 def test_grade_upsert_and_bulletin_math(client, db_session):
     school = setup_school_admin(client, db_session)
     term_id = make_term(db_session, school)
+    level_id = make_level(db_session, school)
 
     subject_resp = client.post("/api/v1/subjects", json={"nom": "Mathématiques", "coefficient": 4})
     subject = subject_resp.json()["data"]
 
     classroom_resp = client.post(
-        "/api/v1/classrooms", json={"niveau": "Primaire", "nom": "6ème A", "salle": "S1"}
+        "/api/v1/classrooms", json={"level_id": level_id, "nom": "6ème A", "salle": "S1"}
     )
     classroom = classroom_resp.json()["data"]
 
@@ -131,9 +143,10 @@ def test_grade_upsert_and_bulletin_math(client, db_session):
 def test_grade_note_out_of_range_rejected(client, db_session):
     school = setup_school_admin(client, db_session)
     term_id = make_term(db_session, school)
+    level_id = make_level(db_session, school)
     subject = client.post("/api/v1/subjects", json={"nom": "Français", "coefficient": 4}).json()["data"]
     classroom = client.post(
-        "/api/v1/classrooms", json={"niveau": "Primaire", "nom": "6ème B"}
+        "/api/v1/classrooms", json={"level_id": level_id, "nom": "6ème B"}
     ).json()["data"]
     student = client.post(
         "/api/v1/students",

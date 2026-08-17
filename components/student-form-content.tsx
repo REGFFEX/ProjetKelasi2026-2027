@@ -20,7 +20,7 @@ import {
   setStudentParents,
 } from '@/lib/api';
 
-interface ClassroomRow { id: string; nom: string; niveau: string; }
+interface ClassroomRow { id: string; nom: string; }
 interface ParentRow { id: string; nom: string; telephone: string; profession: string; }
 
 export function StudentFormContent({ mode, studentId }: { mode: 'create' | 'edit'; studentId?: string }) {
@@ -159,7 +159,7 @@ export function StudentFormContent({ mode, studentId }: { mode: 'create' | 'edit
               <Label htmlFor="classroom_id" className="text-sm">Classe *</Label>
               <select id="classroom_id" value={formData.classroom_id} onChange={e => setFormData({ ...formData, classroom_id: e.target.value })} required className="mt-1.5 w-full rounded-xl border border-input bg-muted/30 px-3 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 transition-all">
                 <option value="">Sélectionner une classe</option>
-                {classrooms.map(c => <option key={c.id} value={c.id}>{c.nom} ({c.niveau})</option>)}
+                {classrooms.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
               </select>
             </div>
             <div>

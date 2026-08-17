@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { CheckSquare, Check, X, Clock, FileText, Save, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { fetchStudents, fetchClassrooms, fetchAttendance, fetchParents, fetchAllStudentParents, upsertAttendance } from '@/lib/api';
+import { ApiError } from '@/lib/api-client';
 import type { AttendanceStatus } from '@/lib/types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,6 +29,7 @@ export function AttendanceContent() {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [attendanceState, setAttendanceState] = useState<Record<string, AttendanceStatus>>({});
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -104,6 +106,7 @@ export function AttendanceContent() {
 
   const handleSave = async () => {
     setSaving(true);
+    setSaveError('');
     try {
       await upsertAttendance(
         classStudents.map(s => ({
@@ -116,7 +119,7 @@ export function AttendanceContent() {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (e) {
-      console.error('Failed to save attendance:', e);
+      setSaveError(e instanceof ApiError ? e.message : 'Échec de l\'enregistrement des présences.');
     } finally {
       setSaving(false);
     }
@@ -152,6 +155,12 @@ export function AttendanceContent() {
         </Button>
       </div>
 
+      {saveError && (
+        <div className="rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive animate-fade-in">
+          {saveError}
+        </div>
+      )}
+
       {/* Class selector + date */}
       <Card className="p-4 sm:p-5 rounded-2xl shadow-card hover:shadow-card-hover transition-shadow">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
@@ -161,7 +170,7 @@ export function AttendanceContent() {
             className="rounded-xl border border-input bg-background px-3 py-2.5 text-sm focus:border-primary focus:outline-none transition-colors w-full sm:w-auto"
           >
             {classrooms.map(c => (
-              <option key={c.id} value={c.id}>{c.nom} ({c.niveau})</option>
+              <option key={c.id} value={c.id}>{c.nom}</option>
             ))}
           </select>
           <div className="flex items-center gap-2">

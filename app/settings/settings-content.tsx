@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { School, Users, Calendar, Save, Upload, Shield, UserCog, Calculator, BookOpen, Mail, Lock, Bell, Loader2 } from 'lucide-react';
-import { fetchSchools, fetchUsers, fetchAcademicYears } from '@/lib/api';
+import { School, Users, Calendar, Save, Upload, Shield, UserCog, Calculator, BookOpen, Mail, Lock, Bell, Loader2, CheckCircle2 } from 'lucide-react';
+import { fetchSchools, fetchUsers, fetchAcademicYears, createAcademicYear, activateAcademicYear } from '@/lib/api';
+import { ApiError } from '@/lib/api-client';
 import { roleLabels } from '@/lib/navigation';
 import type { Role } from '@/lib/types';
 import { Card } from '@/components/ui/card';
@@ -10,7 +11,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+
+const emptyYearForm = { libelle: '', date_debut: '', date_fin: '', activate: false };
 
 type Tab = 'school' | 'users' | 'years' | 'security';
 
@@ -36,6 +46,11 @@ export function SettingsContent() {
   const [schools, setSchools] = useState<Awaited<ReturnType<typeof fetchSchools>>>([]);
   const [users, setUsers] = useState<Awaited<ReturnType<typeof fetchUsers>>>([]);
   const [academicYears, setAcademicYears] = useState<Awaited<ReturnType<typeof fetchAcademicYears>>>([]);
+  const [showYearDialog, setShowYearDialog] = useState(false);
+  const [yearForm, setYearForm] = useState(emptyYearForm);
+  const [savingYear, setSavingYear] = useState(false);
+  const [activatingId, setActivatingId] = useState<string | null>(null);
+  const [yearError, setYearError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -64,6 +79,39 @@ export function SettingsContent() {
   }
 
   const school = schools[0];
+
+  const handleCreateYear = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!yearForm.libelle.trim() || !yearForm.date_debut || !yearForm.date_fin) return;
+    setSavingYear(true);
+    setYearError('');
+    try {
+      const created = await createAcademicYear(yearForm);
+      setAcademicYears(prev => {
+        const updated = yearForm.activate ? prev.map(y => ({ ...y, statut: 'archivee' as const })) : prev;
+        return [created, ...updated];
+      });
+      setYearForm(emptyYearForm);
+      setShowYearDialog(false);
+    } catch (err) {
+      setYearError(err instanceof ApiError ? err.message : 'Échec de la création de l\'année scolaire.');
+    } finally {
+      setSavingYear(false);
+    }
+  };
+
+  const handleActivateYear = async (id: string) => {
+    setActivatingId(id);
+    setYearError('');
+    try {
+      const activated = await activateAcademicYear(id);
+      setAcademicYears(prev => prev.map(y => (y.id === activated.id ? activated : { ...y, statut: 'archivee' as const })));
+    } catch (err) {
+      setYearError(err instanceof ApiError ? err.message : 'Échec de l\'activation.');
+    } finally {
+      setActivatingId(null);
+    }
+  };
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
@@ -200,29 +248,81 @@ export function SettingsContent() {
       )}
 
       {tab === 'years' && (
-        <Card className="overflow-hidden rounded-2xl shadow-card">
-          <div className="p-4 border-b border-border flex items-center justify-between gap-2">
-            <h3 className="font-semibold text-foreground truncate">Années scolaires</h3>
-            <Button size="sm" className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform shrink-0">
-              <Calendar className="h-4 w-4" /> <span className="hidden sm:inline">Nouvelle année</span>
-            </Button>
-          </div>
-          <div className="divide-y divide-border">
-            {academicYears.map(y => (
-              <div key={y.id} className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">{y.libelle}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                    {new Date(y.date_debut).toLocaleDateString('fr-FR')} → {new Date(y.date_fin).toLocaleDateString('fr-FR')}
-                  </p>
+        <>
+          <Dialog open={showYearDialog} onOpenChange={setShowYearDialog}>
+            <DialogContent className="rounded-2xl">
+              <DialogHeader>
+                <DialogTitle>Nouvelle année scolaire</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleCreateYear} className="space-y-3">
+                <div>
+                  <Label htmlFor="y-libelle">Libellé *</Label>
+                  <Input id="y-libelle" placeholder="ex: 2027-2028" value={yearForm.libelle} onChange={e => setYearForm({ ...yearForm, libelle: e.target.value })} required className="mt-1.5 rounded-xl" />
                 </div>
-                <Badge className={cn('badge-modern shrink-0', y.statut === 'active' ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground')}>
-                  {y.statut === 'active' ? 'Active' : 'Archivée'}
-                </Badge>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor="y-debut">Début *</Label>
+                    <Input id="y-debut" type="date" value={yearForm.date_debut} onChange={e => setYearForm({ ...yearForm, date_debut: e.target.value })} required className="mt-1.5 rounded-xl" />
+                  </div>
+                  <div>
+                    <Label htmlFor="y-fin">Fin *</Label>
+                    <Input id="y-fin" type="date" value={yearForm.date_fin} onChange={e => setYearForm({ ...yearForm, date_fin: e.target.value })} required className="mt-1.5 rounded-xl" />
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+                  <input type="checkbox" checked={yearForm.activate} onChange={e => setYearForm({ ...yearForm, activate: e.target.checked })} className="rounded border-input h-4 w-4" />
+                  Activer immédiatement (archive l'année active actuelle)
+                </label>
+                <DialogFooter>
+                  <Button type="submit" disabled={savingYear} className="gap-1.5 rounded-xl">
+                    {savingYear ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calendar className="h-4 w-4" />}
+                    Créer
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          <Card className="overflow-hidden rounded-2xl shadow-card">
+            <div className="p-4 border-b border-border flex items-center justify-between gap-2">
+              <h3 className="font-semibold text-foreground truncate">Années scolaires</h3>
+              <Button size="sm" onClick={() => setShowYearDialog(true)} className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform shrink-0">
+                <Calendar className="h-4 w-4" /> <span className="hidden sm:inline">Nouvelle année</span>
+              </Button>
+            </div>
+            {yearError && (
+              <div className="mx-4 mt-4 rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive animate-fade-in">
+                {yearError}
               </div>
-            ))}
-          </div>
-        </Card>
+            )}
+            <div className="divide-y divide-border">
+              {academicYears.map(y => (
+                <div key={y.id} className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{y.libelle}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                      {new Date(y.date_debut).toLocaleDateString('fr-FR')} → {new Date(y.date_fin).toLocaleDateString('fr-FR')}
+                    </p>
+                  </div>
+                  {y.statut === 'active' ? (
+                    <Badge className="badge-modern shrink-0 bg-success/10 text-success">Active</Badge>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={activatingId === y.id}
+                      onClick={() => handleActivateYear(y.id)}
+                      className="gap-1.5 rounded-xl shrink-0"
+                    >
+                      {activatingId === y.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                      Activer
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Card>
+        </>
       )}
 
       {tab === 'security' && (

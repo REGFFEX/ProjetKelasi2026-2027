@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Mail, Phone, BookOpen, School, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
-import { fetchTeachers, fetchSubjects, fetchClassrooms, createTeacher } from '@/lib/api';
+import { Plus, Mail, Phone, BookOpen, School, CheckCircle2, XCircle, Loader2, X } from 'lucide-react';
+import { fetchTeachers, fetchSubjects, fetchClassrooms, createTeacher, type AssignmentPairInput } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
-const emptyTeacherForm = { nom: '', prenom: '', email: '', telephone: '', matiere_ids: [] as string[], classroom_ids: [] as string[] };
+const emptyTeacherForm = { nom: '', prenom: '', email: '', telephone: '', assignments: [] as AssignmentPairInput[] };
 
 export function TeachersContent() {
   const [loading, setLoading] = useState(true);
@@ -27,6 +27,8 @@ export function TeachersContent() {
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState(emptyTeacherForm);
+  const [pendingSubjectId, setPendingSubjectId] = useState('');
+  const [pendingClassroomId, setPendingClassroomId] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -57,10 +59,19 @@ export function TeachersContent() {
   const getSubjectName = (id: string) => subjects.find(s => s.id === id)?.nom || 'Inconnu';
   const getClassroomName = (id: string) => classrooms.find(c => c.id === id)?.nom || 'Inconnu';
 
-  const toggleField = (field: 'matiere_ids' | 'classroom_ids', id: string) => {
+  const addAssignment = () => {
+    if (!pendingSubjectId || !pendingClassroomId) return;
+    const exists = form.assignments.some(a => a.subject_id === pendingSubjectId && a.classroom_id === pendingClassroomId);
+    if (exists) return;
+    setForm(prev => ({ ...prev, assignments: [...prev.assignments, { subject_id: pendingSubjectId, classroom_id: pendingClassroomId }] }));
+    setPendingSubjectId('');
+    setPendingClassroomId('');
+  };
+
+  const removeAssignment = (subjectId: string, classroomId: string) => {
     setForm(prev => ({
       ...prev,
-      [field]: prev[field].includes(id) ? prev[field].filter(x => x !== id) : [...prev[field], id],
+      assignments: prev.assignments.filter(a => !(a.subject_id === subjectId && a.classroom_id === classroomId)),
     }));
   };
 
@@ -117,33 +128,43 @@ export function TeachersContent() {
               <Input id="t-telephone" value={form.telephone} onChange={e => setForm({ ...form, telephone: e.target.value })} className="mt-1.5 rounded-xl" />
             </div>
             <div>
-              <Label className="mb-1.5 block">Matières</Label>
-              <div className="flex flex-wrap gap-1.5 max-h-[100px] overflow-y-auto scrollbar-thin">
-                {subjects.map(s => (
-                  <button
-                    type="button"
-                    key={s.id}
-                    onClick={() => toggleField('matiere_ids', s.id)}
-                    className={cn('badge-modern text-xs px-2.5 py-1 rounded-full border', form.matiere_ids.includes(s.id) ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground')}
-                  >
-                    {s.nom}
-                  </button>
-                ))}
+              <Label className="mb-1.5 block">Affectations (matière → classe) *</Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Détermine ce que cet enseignant pourra noter et pour quelles classes — pas d'accès en dehors de ces affectations.
+              </p>
+              <div className="flex gap-2">
+                <select
+                  value={pendingSubjectId}
+                  onChange={e => setPendingSubjectId(e.target.value)}
+                  className="flex-1 rounded-xl border border-input bg-muted/30 px-2.5 py-2 text-xs focus:border-primary focus:outline-none"
+                >
+                  <option value="">Matière...</option>
+                  {subjects.map(s => <option key={s.id} value={s.id}>{s.nom}</option>)}
+                </select>
+                <select
+                  value={pendingClassroomId}
+                  onChange={e => setPendingClassroomId(e.target.value)}
+                  className="flex-1 rounded-xl border border-input bg-muted/30 px-2.5 py-2 text-xs focus:border-primary focus:outline-none"
+                >
+                  <option value="">Classe...</option>
+                  {classrooms.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
+                </select>
+                <Button type="button" size="sm" variant="outline" onClick={addAssignment} disabled={!pendingSubjectId || !pendingClassroomId} className="shrink-0 rounded-xl">
+                  <Plus className="h-4 w-4" />
+                </Button>
               </div>
-            </div>
-            <div>
-              <Label className="mb-1.5 block">Classes</Label>
-              <div className="flex flex-wrap gap-1.5 max-h-[100px] overflow-y-auto scrollbar-thin">
-                {classrooms.map(c => (
-                  <button
-                    type="button"
-                    key={c.id}
-                    onClick={() => toggleField('classroom_ids', c.id)}
-                    className={cn('badge-modern text-xs px-2.5 py-1 rounded-full border', form.classroom_ids.includes(c.id) ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground')}
-                  >
-                    {c.nom}
-                  </button>
+              <div className="mt-2 flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto scrollbar-thin">
+                {form.assignments.map(a => (
+                  <span key={`${a.subject_id}-${a.classroom_id}`} className="badge-modern text-xs px-2.5 py-1 rounded-full border border-primary bg-primary/10 text-primary inline-flex items-center gap-1.5">
+                    {getSubjectName(a.subject_id)} → {getClassroomName(a.classroom_id)}
+                    <button type="button" onClick={() => removeAssignment(a.subject_id, a.classroom_id)} className="hover:text-destructive">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
                 ))}
+                {form.assignments.length === 0 && (
+                  <p className="text-xs text-muted-foreground italic">Aucune affectation pour le moment.</p>
+                )}
               </div>
             </div>
             <DialogFooter>

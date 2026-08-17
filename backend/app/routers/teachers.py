@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.authz import get_active_academic_year_or_none
 from app.db import get_db
 from app.deps import CurrentUser, require_role
-from app.models.people import Teacher, TeacherSubject, TeacherClassroom
+from app.models.people import Teacher, TeacherAssignment
 from app.models.user import Role
 from app.response import envelope, APIException
 from app.schemas.teachers import TeacherCreate, TeacherUpdate, TeacherOut
@@ -14,14 +15,15 @@ READ_ROLES = (Role.school_admin, Role.secretary, Role.accountant, Role.teacher)
 WRITE_ROLES = (Role.school_admin,)
 
 
-def _serialize(db: Session, teacher: Teacher) -> dict:
-    matiere_ids = [
-        r.subject_id for r in db.query(TeacherSubject).filter(TeacherSubject.teacher_id == teacher.id).all()
-    ]
-    classroom_ids = [
-        r.classroom_id
-        for r in db.query(TeacherClassroom).filter(TeacherClassroom.teacher_id == teacher.id).all()
-    ]
+def _serialize(db: Session, current_user: CurrentUser, teacher: Teacher) -> dict:
+    year = get_active_academic_year_or_none(db, current_user.school_id)
+    assignments = (
+        db.query(TeacherAssignment)
+        .filter(TeacherAssignment.teacher_id == teacher.id, TeacherAssignment.academic_year_id == year.id)
+        .all()
+        if year
+        else []
+    )
     out = TeacherOut(
         id=teacher.id,
         school_id=teacher.school_id,
@@ -31,27 +33,35 @@ def _serialize(db: Session, teacher: Teacher) -> dict:
         email=teacher.email,
         telephone=teacher.telephone,
         statut=teacher.statut,
-        matiere_ids=matiere_ids,
-        classroom_ids=classroom_ids,
+        matiere_ids=sorted({a.subject_id for a in assignments}),
+        classroom_ids=sorted({a.classroom_id for a in assignments}),
     )
     return out.model_dump()
 
 
-def _sync_links(db: Session, teacher_id: str, matiere_ids: list[str] | None, classroom_ids: list[str] | None):
-    if matiere_ids is not None:
-        db.query(TeacherSubject).filter(TeacherSubject.teacher_id == teacher_id).delete()
-        for subject_id in matiere_ids:
-            db.add(TeacherSubject(teacher_id=teacher_id, subject_id=subject_id))
-    if classroom_ids is not None:
-        db.query(TeacherClassroom).filter(TeacherClassroom.teacher_id == teacher_id).delete()
-        for classroom_id in classroom_ids:
-            db.add(TeacherClassroom(teacher_id=teacher_id, classroom_id=classroom_id))
+def _sync_assignments(db: Session, current_user: CurrentUser, teacher_id: str, pairs: list) -> None:
+    year = get_active_academic_year_or_none(db, current_user.school_id)
+    if not year:
+        raise APIException(409, "Aucune année scolaire active pour cette école.")
+    db.query(TeacherAssignment).filter(
+        TeacherAssignment.teacher_id == teacher_id, TeacherAssignment.academic_year_id == year.id
+    ).delete()
+    for pair in pairs:
+        db.add(
+            TeacherAssignment(
+                school_id=current_user.school_id,
+                teacher_id=teacher_id,
+                subject_id=pair.subject_id,
+                classroom_id=pair.classroom_id,
+                academic_year_id=year.id,
+            )
+        )
 
 
 @router.get("")
 def list_teachers(current_user: CurrentUser = Depends(require_role(*READ_ROLES)), db: Session = Depends(get_db)):
     rows = db.query(Teacher).filter(Teacher.school_id == current_user.school_id).order_by(Teacher.nom).all()
-    return envelope([_serialize(db, r) for r in rows])
+    return envelope([_serialize(db, current_user, r) for r in rows])
 
 
 @router.post("")
@@ -60,14 +70,15 @@ def create_teacher(
     current_user: CurrentUser = Depends(require_role(*WRITE_ROLES)),
     db: Session = Depends(get_db),
 ):
-    data = body.model_dump(exclude={"matiere_ids", "classroom_ids"})
+    data = body.model_dump(exclude={"assignments"})
     teacher = Teacher(school_id=current_user.school_id, **data)
     db.add(teacher)
     db.flush()
-    _sync_links(db, teacher.id, body.matiere_ids, body.classroom_ids)
+    if body.assignments:
+        _sync_assignments(db, current_user, teacher.id, body.assignments)
     db.commit()
     db.refresh(teacher)
-    return envelope(_serialize(db, teacher), "Enseignant créé.")
+    return envelope(_serialize(db, current_user, teacher), "Enseignant créé.")
 
 
 @router.patch("/{teacher_id}")
@@ -78,14 +89,14 @@ def update_teacher(
     db: Session = Depends(get_db),
 ):
     teacher = _get_scoped(db, current_user, teacher_id)
-    updates = body.model_dump(exclude_unset=True, exclude={"matiere_ids", "classroom_ids"})
+    updates = body.model_dump(exclude_unset=True, exclude={"assignments"})
     for field, value in updates.items():
         setattr(teacher, field, value)
-    body_dict = body.model_dump(exclude_unset=True)
-    _sync_links(db, teacher.id, body_dict.get("matiere_ids"), body_dict.get("classroom_ids"))
+    if body.assignments is not None:
+        _sync_assignments(db, current_user, teacher.id, body.assignments)
     db.commit()
     db.refresh(teacher)
-    return envelope(_serialize(db, teacher), "Enseignant mis à jour.")
+    return envelope(_serialize(db, current_user, teacher), "Enseignant mis à jour.")
 
 
 @router.delete("/{teacher_id}")

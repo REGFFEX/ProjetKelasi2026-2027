@@ -8,6 +8,8 @@ import {
   fetchStudents,
   fetchTeachers,
   fetchSubjects,
+  fetchCycles,
+  fetchLevels,
   createClassroom,
   updateClassroom,
   deleteClassroom,
@@ -31,7 +33,7 @@ import { cn } from '@/lib/utils';
 
 type Tab = 'classes' | 'subjects';
 
-const emptyClassForm = { niveau: '', nom: '', salle: '', enseignant_principal_id: '' };
+const emptyClassForm = { level_id: '', nom: '', salle: '', filiere: '', enseignant_principal_id: '' };
 const emptySubjectForm = { nom: '', coefficient: 1 };
 
 export function ClassesContent() {
@@ -41,6 +43,8 @@ export function ClassesContent() {
   const [students, setStudents] = useState<Awaited<ReturnType<typeof fetchStudents>>>([]);
   const [teachers, setTeachers] = useState<Awaited<ReturnType<typeof fetchTeachers>>>([]);
   const [subjects, setSubjects] = useState<Awaited<ReturnType<typeof fetchSubjects>>>([]);
+  const [cycles, setCycles] = useState<Awaited<ReturnType<typeof fetchCycles>>>([]);
+  const [levels, setLevels] = useState<Awaited<ReturnType<typeof fetchLevels>>>([]);
 
   const [showClassDialog, setShowClassDialog] = useState(false);
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
@@ -56,17 +60,21 @@ export function ClassesContent() {
     let cancelled = false;
     (async () => {
       try {
-        const [c, s, t, sub] = await Promise.all([
+        const [c, s, t, sub, cyc, lvl] = await Promise.all([
           fetchClassrooms(),
           fetchStudents(),
           fetchTeachers(),
           fetchSubjects(),
+          fetchCycles(),
+          fetchLevels(),
         ]);
         if (cancelled) return;
         setClassrooms(c);
         setStudents(s);
         setTeachers(t);
         setSubjects(sub);
+        setCycles(cyc);
+        setLevels(lvl);
       } catch (e) {
         console.error('Failed to load classes data:', e);
       } finally {
@@ -89,6 +97,13 @@ export function ClassesContent() {
     return t ? `${t.prenom} ${t.nom}` : 'Inconnu';
   };
 
+  const getLevelLabel = (levelId: string) => {
+    const level = levels.find(l => l.id === levelId);
+    if (!level) return 'Inconnu';
+    const cycle = cycles.find(cy => cy.id === level.cycle_id);
+    return cycle ? `${level.nom} (${cycle.nom})` : level.nom;
+  };
+
   const openCreateDialog = () => {
     if (tab === 'classes') {
       setEditingClassId(null);
@@ -103,19 +118,26 @@ export function ClassesContent() {
 
   const openEditClass = (c: Awaited<ReturnType<typeof fetchClassrooms>>[number]) => {
     setEditingClassId(c.id);
-    setClassForm({ niveau: c.niveau, nom: c.nom, salle: c.salle, enseignant_principal_id: c.enseignant_principal_id || '' });
+    setClassForm({
+      level_id: c.level_id,
+      nom: c.nom,
+      salle: c.salle,
+      filiere: c.filiere || '',
+      enseignant_principal_id: c.enseignant_principal_id || '',
+    });
     setShowClassDialog(true);
   };
 
   const handleSaveClass = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!classForm.niveau.trim() || !classForm.nom.trim()) return;
+    if (!classForm.level_id || !classForm.nom.trim()) return;
     setSavingClass(true);
     try {
       const payload = {
-        niveau: classForm.niveau,
+        level_id: classForm.level_id,
         nom: classForm.nom,
         salle: classForm.salle,
+        filiere: classForm.filiere || null,
         enseignant_principal_id: classForm.enseignant_principal_id || null,
       };
       if (editingClassId) {
@@ -199,7 +221,16 @@ export function ClassesContent() {
           <form onSubmit={handleSaveClass} className="space-y-3">
             <div>
               <Label htmlFor="c-niveau">Niveau *</Label>
-              <Input id="c-niveau" value={classForm.niveau} onChange={e => setClassForm({ ...classForm, niveau: e.target.value })} required className="mt-1.5 rounded-xl" />
+              <select
+                id="c-niveau"
+                value={classForm.level_id}
+                onChange={e => setClassForm({ ...classForm, level_id: e.target.value })}
+                required
+                className="mt-1.5 w-full rounded-xl border border-input bg-muted/30 px-3 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 transition-all"
+              >
+                <option value="">Sélectionner un niveau</option>
+                {levels.map(l => <option key={l.id} value={l.id}>{getLevelLabel(l.id)}</option>)}
+              </select>
             </div>
             <div>
               <Label htmlFor="c-nom">Nom *</Label>
@@ -208,6 +239,10 @@ export function ClassesContent() {
             <div>
               <Label htmlFor="c-salle">Salle</Label>
               <Input id="c-salle" value={classForm.salle} onChange={e => setClassForm({ ...classForm, salle: e.target.value })} className="mt-1.5 rounded-xl" />
+            </div>
+            <div>
+              <Label htmlFor="c-filiere">Filière (optionnel)</Label>
+              <Input id="c-filiere" value={classForm.filiere} onChange={e => setClassForm({ ...classForm, filiere: e.target.value })} placeholder="ex: Math-Physique" className="mt-1.5 rounded-xl" />
             </div>
             <div>
               <Label htmlFor="c-prof">Professeur principal</Label>
@@ -301,7 +336,8 @@ export function ClassesContent() {
                 </div>
 
                 <h3 className="font-semibold text-foreground truncate">{c.nom}</h3>
-                <Badge variant="secondary" className="badge-modern mt-1">{c.niveau}</Badge>
+                <Badge variant="secondary" className="badge-modern mt-1">{getLevelLabel(c.level_id)}</Badge>
+                {c.filiere && <Badge variant="outline" className="badge-modern mt-1 ml-1.5">{c.filiere}</Badge>}
 
                 <div className="mt-4 space-y-2 text-sm">
                   <p className="flex items-center gap-2 text-muted-foreground">

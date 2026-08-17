@@ -100,7 +100,9 @@ export function ReportsContent() {
   // Grades data
   const gradesByClass = classrooms.map(c => {
     const classStudents = students.filter(s => s.classroom_id === c.id);
-    const classGrades = grades.filter(g => classStudents.some(s => s.id === g.student_id));
+    const classGrades = grades
+      .filter(g => classStudents.some(s => s.id === g.student_id))
+      .filter((g): g is typeof g & { note: number } => g.note !== null);
     const avg = classGrades.length > 0
       ? (classGrades.reduce((sum, g) => sum + g.note, 0) / classGrades.length).toFixed(1)
       : '0';

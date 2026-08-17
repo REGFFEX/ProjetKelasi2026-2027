@@ -3,14 +3,18 @@ from pydantic import BaseModel
 from app.models.user import UserStatus
 
 
+class AssignmentPair(BaseModel):
+    subject_id: str
+    classroom_id: str
+
+
 class TeacherCreate(BaseModel):
     nom: str
     prenom: str
     email: str
     telephone: str = ""
     statut: UserStatus = UserStatus.actif
-    matiere_ids: list[str] = []
-    classroom_ids: list[str] = []
+    assignments: list[AssignmentPair] = []
 
 
 class TeacherUpdate(BaseModel):
@@ -19,8 +23,7 @@ class TeacherUpdate(BaseModel):
     email: str | None = None
     telephone: str | None = None
     statut: UserStatus | None = None
-    matiere_ids: list[str] | None = None
-    classroom_ids: list[str] | None = None
+    assignments: list[AssignmentPair] | None = None
 
 
 class TeacherOut(BaseModel):

@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.authz import get_active_academic_year_or_none
 from app.db import get_db
 from app.deps import CurrentUser, require_role
-from app.models.people import Student, Parent, StudentParent
+from app.models.people import Student, Parent, StudentParent, Enrollment
 from app.models.user import Role
 from app.response import envelope, APIException
 from app.schemas.students import StudentCreate, StudentUpdate, StudentOut, StudentParentsSet
@@ -15,6 +16,57 @@ READ_ROLES = (Role.school_admin, Role.secretary, Role.accountant, Role.teacher)
 WRITE_ROLES = (Role.school_admin, Role.secretary)
 
 
+def _current_classroom_id(db: Session, school_id: str, student_id: str) -> str | None:
+    year = get_active_academic_year_or_none(db, school_id)
+    if not year:
+        return None
+    enrollment = (
+        db.query(Enrollment)
+        .filter(Enrollment.student_id == student_id, Enrollment.academic_year_id == year.id)
+        .first()
+    )
+    return enrollment.classroom_id if enrollment else None
+
+
+def _serialize(db: Session, current_user: CurrentUser, student: Student) -> dict:
+    out = StudentOut(
+        id=student.id,
+        school_id=student.school_id,
+        matricule=student.matricule,
+        nom=student.nom,
+        prenom=student.prenom,
+        date_naissance=student.date_naissance,
+        photo=student.photo,
+        classroom_id=_current_classroom_id(db, current_user.school_id, student.id),
+        statut=student.statut,
+    )
+    return out.model_dump()
+
+
+def _set_enrollment(db: Session, current_user: CurrentUser, student_id: str, classroom_id: str | None) -> None:
+    if classroom_id is None:
+        return
+    year = get_active_academic_year_or_none(db, current_user.school_id)
+    if not year:
+        raise APIException(409, "Aucune année scolaire active pour cette école.")
+    enrollment = (
+        db.query(Enrollment)
+        .filter(Enrollment.student_id == student_id, Enrollment.academic_year_id == year.id)
+        .first()
+    )
+    if enrollment:
+        enrollment.classroom_id = classroom_id
+    else:
+        db.add(
+            Enrollment(
+                school_id=current_user.school_id,
+                student_id=student_id,
+                classroom_id=classroom_id,
+                academic_year_id=year.id,
+            )
+        )
+
+
 @router.get("")
 def list_students(
     current_user: CurrentUser = Depends(require_role(*READ_ROLES)), db: Session = Depends(get_db)
@@ -22,7 +74,7 @@ def list_students(
     students = (
         db.query(Student).filter(Student.school_id == current_user.school_id).order_by(Student.nom).all()
     )
-    return envelope([StudentOut.model_validate(s).model_dump() for s in students])
+    return envelope([_serialize(db, current_user, s) for s in students])
 
 
 @router.get("/parent-links")
@@ -45,7 +97,7 @@ def get_student(
     db: Session = Depends(get_db),
 ):
     student = _get_scoped(db, current_user, student_id)
-    return envelope(StudentOut.model_validate(student).model_dump())
+    return envelope(_serialize(db, current_user, student))
 
 
 @router.post("")
@@ -54,11 +106,14 @@ def create_student(
     current_user: CurrentUser = Depends(require_role(*WRITE_ROLES)),
     db: Session = Depends(get_db),
 ):
-    student = Student(school_id=current_user.school_id, **body.model_dump())
+    data = body.model_dump(exclude={"classroom_id"})
+    student = Student(school_id=current_user.school_id, **data)
     db.add(student)
+    db.flush()
+    _set_enrollment(db, current_user, student.id, body.classroom_id)
     db.commit()
     db.refresh(student)
-    return envelope(StudentOut.model_validate(student).model_dump(), "Élève créé.")
+    return envelope(_serialize(db, current_user, student), "Élève créé.")
 
 
 @router.patch("/{student_id}")
@@ -69,11 +124,14 @@ def update_student(
     db: Session = Depends(get_db),
 ):
     student = _get_scoped(db, current_user, student_id)
-    for field, value in body.model_dump(exclude_unset=True).items():
+    updates = body.model_dump(exclude_unset=True, exclude={"classroom_id"})
+    for field, value in updates.items():
         setattr(student, field, value)
+    if "classroom_id" in body.model_fields_set:
+        _set_enrollment(db, current_user, student.id, body.classroom_id)
     db.commit()
     db.refresh(student)
-    return envelope(StudentOut.model_validate(student).model_dump(), "Élève mis à jour.")
+    return envelope(_serialize(db, current_user, student), "Élève mis à jour.")
 
 
 @router.delete("/{student_id}")

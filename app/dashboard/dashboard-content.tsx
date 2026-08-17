@@ -7,7 +7,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { formatMoney, fetchStudents, fetchAttendance, fetchInvoices, fetchPayments, fetchClassrooms, fetchNotifications } from '@/lib/api';
+import { formatMoney, fetchStudents, fetchAttendance, fetchInvoices, fetchPayments, fetchClassrooms, fetchLevels, fetchNotifications } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import type { Role } from '@/lib/types';
 
@@ -36,12 +36,13 @@ export function DashboardContent() {
   useEffect(() => {
     async function load() {
       try {
-        const [students, attendance, invoices, payments, classrooms, notifications] = await Promise.all([
+        const [students, attendance, invoices, payments, classrooms, levels, notifications] = await Promise.all([
           fetchStudents(),
           fetchAttendance(),
           fetchInvoices(),
           fetchPayments(),
           fetchClassrooms(),
+          fetchLevels(),
           fetchNotifications(),
         ]);
 
@@ -85,8 +86,9 @@ export function DashboardContent() {
         const niveauMap = new Map<string, number>();
         students.forEach(s => {
           const classroom = classrooms.find(c => c.id === s.classroom_id);
-          if (classroom) {
-            niveauMap.set(classroom.niveau, (niveauMap.get(classroom.niveau) ?? 0) + 1);
+          const level = classroom ? levels.find(l => l.id === classroom.level_id) : undefined;
+          if (level) {
+            niveauMap.set(level.nom, (niveauMap.get(level.nom) ?? 0) + 1);
           }
         });
         const repartitionEffectif = Array.from(niveauMap.entries()).map(([niveau, effectif]) => ({ niveau, effectif }));
