@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { Search, Plus, Phone, Mail, MapPin, Users, Briefcase, Loader2 } from 'lucide-react';
+import { Search, Plus, Phone, Mail, MapPin, Users, Briefcase, Loader2, KeyRound } from 'lucide-react';
 import { fetchParents, fetchStudents, fetchAllStudentParents, createParent } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,8 @@ export function ParentsContent() {
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState(emptyParentForm);
+  const [withLogin, setWithLogin] = useState(false);
+  const [loginPassword, setLoginPassword] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -60,6 +62,7 @@ export function ParentsContent() {
   const handleCreateParent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.nom.trim()) return;
+    if (withLogin && (loginPassword.length < 6 || !form.email.trim())) return;
     setCreating(true);
     try {
       const created = await createParent({
@@ -68,9 +71,12 @@ export function ParentsContent() {
         email: form.email || null,
         adresse: form.adresse,
         profession: form.profession,
+        ...(withLogin ? { password: loginPassword } : {}),
       });
       setParents(prev => [...prev, created].sort((a, b) => a.nom.localeCompare(b.nom)));
       setForm(emptyParentForm);
+      setWithLogin(false);
+      setLoginPassword('');
       setShowCreate(false);
     } catch (err) {
       console.error('Failed to create parent:', err);
@@ -125,6 +131,18 @@ export function ParentsContent() {
               <Label htmlFor="p-profession">Profession</Label>
               <Input id="p-profession" value={form.profession} onChange={e => setForm({ ...form, profession: e.target.value })} className="mt-1.5 rounded-xl" />
             </div>
+            <div className="rounded-xl border border-border p-3">
+              <label className="flex items-center gap-2.5 text-sm cursor-pointer">
+                <input type="checkbox" checked={withLogin} onChange={e => setWithLogin(e.target.checked)} className="rounded border-input" />
+                <span className="font-medium text-foreground">Créer un accès de connexion (nécessite un email)</span>
+              </label>
+              {withLogin && (
+                <div className="mt-2.5">
+                  <Label htmlFor="p-password">Mot de passe *</Label>
+                  <Input id="p-password" type="password" minLength={6} value={loginPassword} onChange={e => setLoginPassword(e.target.value)} required={withLogin} className="mt-1.5 rounded-xl" />
+                </div>
+              )}
+            </div>
             <DialogFooter>
               <Button type="submit" disabled={creating} className="gap-1.5 rounded-xl">
                 {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
@@ -165,6 +183,11 @@ export function ParentsContent() {
                   <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5 truncate">
                     <Briefcase className="h-3 w-3 shrink-0" /> <span className="truncate">{p.profession}</span>
                   </p>
+                  {p.user_id && (
+                    <span className="badge-modern inline-flex items-center gap-1 mt-1 text-xs font-medium text-primary" title="Compte de connexion actif">
+                      <KeyRound className="h-3 w-3" /> Connexion
+                    </span>
+                  )}
                 </div>
               </div>
 

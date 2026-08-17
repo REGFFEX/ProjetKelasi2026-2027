@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Building2, Plus, Users, GraduationCap, Loader2, Pencil } from 'lucide-react';
-import { fetchAllSchoolsAdmin, createSchoolAdmin, updateSchoolAdmin } from '@/lib/api';
+import { Building2, Plus, Users, GraduationCap, Loader2, Pencil, UserPlus } from 'lucide-react';
+import { fetchAllSchoolsAdmin, createSchoolAdmin, updateSchoolAdmin, createSchoolAdminUser } from '@/lib/api';
 import { ApiError } from '@/lib/api-client';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,7 @@ import {
 import { cn } from '@/lib/utils';
 
 const emptyForm = { nom: '', adresse: '', telephone: '', statut_abonnement: 'essai' as 'actif' | 'essai' | 'expire' };
+const emptyAdminForm = { nom: '', email: '', password: '', telephone: '' };
 
 const statusConfig = {
   actif: { label: 'Actif', color: 'bg-success/10 text-success' },
@@ -34,6 +35,11 @@ export function SchoolsContent() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [adminSchoolId, setAdminSchoolId] = useState<string | null>(null);
+  const [adminForm, setAdminForm] = useState(emptyAdminForm);
+  const [savingAdmin, setSavingAdmin] = useState(false);
+  const [adminError, setAdminError] = useState('');
+  const [adminSuccess, setAdminSuccess] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -74,6 +80,30 @@ export function SchoolsContent() {
       setError(err instanceof ApiError ? err.message : 'Échec de l\'enregistrement.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const openAddAdmin = (schoolId: string) => {
+    setAdminSchoolId(schoolId);
+    setAdminForm(emptyAdminForm);
+    setAdminError('');
+    setAdminSuccess('');
+  };
+
+  const handleCreateAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminSchoolId || !adminForm.nom.trim() || !adminForm.email.trim() || adminForm.password.length < 6) return;
+    setSavingAdmin(true);
+    setAdminError('');
+    try {
+      await createSchoolAdminUser(adminSchoolId, adminForm);
+      setSchools(prev => prev.map(s => (s.id === adminSchoolId ? { ...s, user_count: s.user_count + 1 } : s)));
+      setAdminSuccess('Administrateur créé.');
+      setAdminForm(emptyAdminForm);
+    } catch (err) {
+      setAdminError(err instanceof ApiError ? err.message : 'Échec de la création de l\'administrateur.');
+    } finally {
+      setSavingAdmin(false);
     }
   };
 
@@ -148,6 +178,43 @@ export function SchoolsContent() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!adminSchoolId} onOpenChange={open => !open && setAdminSchoolId(null)}>
+        <DialogContent className="rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Ajouter un administrateur</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground -mt-2">
+            Ce compte pourra ensuite créer et gérer tous les autres utilisateurs de son école.
+          </p>
+          <form onSubmit={handleCreateAdmin} className="space-y-3">
+            <div>
+              <Label htmlFor="a-nom">Nom complet *</Label>
+              <Input id="a-nom" value={adminForm.nom} onChange={e => setAdminForm({ ...adminForm, nom: e.target.value })} required className="mt-1.5 rounded-xl" />
+            </div>
+            <div>
+              <Label htmlFor="a-email">Email *</Label>
+              <Input id="a-email" type="email" value={adminForm.email} onChange={e => setAdminForm({ ...adminForm, email: e.target.value })} required className="mt-1.5 rounded-xl" />
+            </div>
+            <div>
+              <Label htmlFor="a-password">Mot de passe *</Label>
+              <Input id="a-password" type="password" minLength={6} value={adminForm.password} onChange={e => setAdminForm({ ...adminForm, password: e.target.value })} required className="mt-1.5 rounded-xl" />
+            </div>
+            <div>
+              <Label htmlFor="a-telephone">Téléphone</Label>
+              <Input id="a-telephone" value={adminForm.telephone} onChange={e => setAdminForm({ ...adminForm, telephone: e.target.value })} className="mt-1.5 rounded-xl" />
+            </div>
+            {adminError && <div className="rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive">{adminError}</div>}
+            {adminSuccess && <div className="rounded-xl bg-success/10 px-3 py-2.5 text-sm text-success">{adminSuccess}</div>}
+            <DialogFooter>
+              <Button type="submit" disabled={savingAdmin} className="gap-1.5 rounded-xl">
+                {savingAdmin ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+                Créer
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {error && (
         <div className="rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive animate-fade-in">
           {error}
@@ -187,6 +254,12 @@ export function SchoolsContent() {
                   <option value="expire">Expiré</option>
                 </select>
               </div>
+              <button
+                onClick={() => openAddAdmin(s.id)}
+                className="mt-3 flex items-center gap-1.5 text-xs font-medium text-primary hover:underline w-full"
+              >
+                <UserPlus className="h-3.5 w-3.5" /> Ajouter un administrateur
+              </button>
             </Card>
           );
         })}

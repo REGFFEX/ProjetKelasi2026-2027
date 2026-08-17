@@ -75,14 +75,17 @@ def _setup(db_session):
     }
 
 
-def _login_teacher(client):
-    resp = client.post("/api/v1/auth/login", json={"email": "jean.prof@test.cd", "password": "password123"})
+def _login_teacher(client, school_id: str):
+    resp = client.post(
+        "/api/v1/auth/login",
+        json={"email": "jean.prof@test.cd", "password": "password123", "school_id": school_id},
+    )
     assert resp.status_code == 200
 
 
 def test_teacher_can_create_assessment_only_in_assigned_scope(client, db_session):
     ctx = _setup(db_session)
-    _login_teacher(client)
+    _login_teacher(client, ctx["school"].id)
 
     ok = client.post(
         "/api/v1/assessments",
@@ -133,7 +136,7 @@ def test_teacher_cannot_grade_outside_assigned_scope(client, db_session):
     db_session.add_all([own, wrong_subject, wrong_classroom])
     db_session.commit()
 
-    _login_teacher(client)
+    _login_teacher(client, ctx["school"].id)
 
     ok = client.put(
         "/api/v1/grades",
@@ -151,7 +154,7 @@ def test_teacher_cannot_grade_outside_assigned_scope(client, db_session):
 
 def test_teacher_attendance_scoped_but_secretary_is_not(client, db_session):
     ctx = _setup(db_session)
-    _login_teacher(client)
+    _login_teacher(client, ctx["school"].id)
 
     ok = client.put(
         "/api/v1/attendance",
@@ -174,11 +177,17 @@ def test_teacher_attendance_scoped_but_secretary_is_not(client, db_session):
     assert forbidden.status_code == 403
 
     client.post("/api/v1/auth/logout")
-    secretary_signup = client.post(
-        "/api/v1/auth/signup",
-        json={"nom": "Secrétaire", "email": "secretary@test.cd", "password": "password123", "role": "secretary", "school_id": ctx["school"].id},
+    secretary_user = User(
+        school_id=ctx["school"].id, nom="Secrétaire", email="secretary@test.cd",
+        password_hash=hash_password("password123"), telephone="", role=Role.secretary, statut=UserStatus.actif,
     )
-    assert secretary_signup.status_code == 200
+    db_session.add(secretary_user)
+    db_session.commit()
+    secretary_login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "secretary@test.cd", "password": "password123", "school_id": ctx["school"].id},
+    )
+    assert secretary_login.status_code == 200
 
     secretary_ok = client.put(
         "/api/v1/attendance",

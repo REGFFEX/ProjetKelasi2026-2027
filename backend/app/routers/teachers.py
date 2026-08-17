@@ -1,13 +1,14 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.authz import get_active_academic_year_or_none
+from app.authz import get_active_academic_year_or_none, write_audit_log
 from app.db import get_db
 from app.deps import CurrentUser, require_role
 from app.models.people import Teacher, TeacherAssignment
-from app.models.user import Role
+from app.models.user import Role, User, UserStatus
 from app.response import envelope, APIException
 from app.schemas.teachers import TeacherCreate, TeacherUpdate, TeacherOut
+from app.security import hash_password
 
 router = APIRouter(prefix="/teachers", tags=["teachers"])
 
@@ -64,18 +65,38 @@ def list_teachers(current_user: CurrentUser = Depends(require_role(*READ_ROLES))
     return envelope([_serialize(db, current_user, r) for r in rows])
 
 
+def _provision_login(db: Session, current_user: CurrentUser, teacher: Teacher, password: str) -> None:
+    if db.query(User).filter(User.school_id == current_user.school_id, User.email == teacher.email).first():
+        raise APIException(409, "Un compte avec cet email existe déjà dans cette école.")
+    user = User(
+        school_id=current_user.school_id,
+        nom=f"{teacher.prenom} {teacher.nom}".strip(),
+        email=teacher.email,
+        password_hash=hash_password(password),
+        telephone=teacher.telephone,
+        role=Role.teacher,
+        statut=UserStatus.actif,
+    )
+    db.add(user)
+    db.flush()
+    teacher.user_id = user.id
+    write_audit_log(db, current_user, "CREATE_USER", "user", user.id, new_value={"email": user.email, "role": "teacher"})
+
+
 @router.post("")
 def create_teacher(
     body: TeacherCreate,
     current_user: CurrentUser = Depends(require_role(*WRITE_ROLES)),
     db: Session = Depends(get_db),
 ):
-    data = body.model_dump(exclude={"assignments"})
+    data = body.model_dump(exclude={"assignments", "password"})
     teacher = Teacher(school_id=current_user.school_id, **data)
     db.add(teacher)
     db.flush()
     if body.assignments:
         _sync_assignments(db, current_user, teacher.id, body.assignments)
+    if body.password:
+        _provision_login(db, current_user, teacher, body.password)
     db.commit()
     db.refresh(teacher)
     return envelope(_serialize(db, current_user, teacher), "Enseignant créé.")
@@ -89,11 +110,18 @@ def update_teacher(
     db: Session = Depends(get_db),
 ):
     teacher = _get_scoped(db, current_user, teacher_id)
-    updates = body.model_dump(exclude_unset=True, exclude={"assignments"})
+    updates = body.model_dump(exclude_unset=True, exclude={"assignments", "password"})
     for field, value in updates.items():
         setattr(teacher, field, value)
     if body.assignments is not None:
         _sync_assignments(db, current_user, teacher.id, body.assignments)
+    if body.password:
+        if teacher.user_id:
+            user = db.get(User, teacher.user_id)
+            user.password_hash = hash_password(body.password)
+            write_audit_log(db, current_user, "RESET_PASSWORD", "user", user.id)
+        else:
+            _provision_login(db, current_user, teacher, body.password)
     db.commit()
     db.refresh(teacher)
     return envelope(_serialize(db, current_user, teacher), "Enseignant mis à jour.")

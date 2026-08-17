@@ -26,6 +26,7 @@ export interface DbStudent {
 export interface DbParent {
   id: string;
   school_id: string;
+  user_id: string | null;
   nom: string;
   telephone: string;
   email: string | null;
@@ -216,6 +217,8 @@ export interface ParentInput {
   email?: string | null;
   adresse?: string;
   profession?: string;
+  /** Set to grant/reset a login for this parent (requires email above). */
+  password?: string;
 }
 
 export const fetchParents = () => apiGet<DbParent[]>('/parents');
@@ -289,6 +292,8 @@ export interface TeacherInput {
   telephone?: string;
   statut?: 'actif' | 'inactif';
   assignments?: AssignmentPairInput[];
+  /** Set to grant/reset a login for this teacher. */
+  password?: string;
 }
 
 export const fetchTeachers = () => apiGet<DbTeacher[]>('/teachers');
@@ -393,6 +398,26 @@ export const createTerm = (term: { academic_year_id: string; libelle: string; da
 
 export const fetchUsers = () => apiGet<DbUser[]>('/users');
 
+export interface UserCreateInput {
+  nom: string;
+  email: string;
+  password: string;
+  telephone?: string;
+  role: 'school_admin' | 'secretary' | 'accountant' | 'teacher' | 'parent';
+}
+
+export interface UserUpdateInput {
+  nom?: string;
+  telephone?: string;
+  role?: 'school_admin' | 'secretary' | 'accountant';
+  statut?: 'actif' | 'inactif';
+}
+
+export const createUser = (user: UserCreateInput) => apiPost<DbUser>('/users', user);
+export const updateUser = (id: string, updates: UserUpdateInput) => apiPatch<DbUser>(`/users/${id}`, updates);
+export const resetUserPassword = (id: string, newPassword: string) =>
+  apiPost<void>(`/users/${id}/reset-password`, { new_password: newPassword });
+
 export async function fetchSchools(): Promise<DbSchool[]> {
   const rows = await apiGet<{ id: string; nom: string }[]>('/auth/schools');
   return rows.map(r => ({
@@ -431,6 +456,10 @@ export const fetchAllSchoolsAdmin = () => apiGet<DbSchoolAdmin[]>('/admin/school
 export const createSchoolAdmin = (school: SchoolAdminInput) => apiPost<DbSchoolAdmin>('/admin/schools', school);
 export const updateSchoolAdmin = (id: string, updates: Partial<SchoolAdminInput>) =>
   apiPatch<DbSchoolAdmin>(`/admin/schools/${id}`, updates);
+
+/** Bootstraps the first school_admin login for a given school (super_admin only). */
+export const createSchoolAdminUser = (schoolId: string, user: { nom: string; email: string; password: string; telephone?: string }) =>
+  apiPost<DbUser>(`/admin/schools/${schoolId}/admin`, { ...user, role: 'school_admin' });
 
 // ── Parent portal (scoped to the logged-in parent's own children) ──
 

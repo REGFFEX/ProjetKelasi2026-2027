@@ -43,7 +43,7 @@ def _setup(db_session):
 
 def test_parent_sees_only_own_children(client, db_session):
     ctx = _setup(db_session)
-    login = client.post("/api/v1/auth/login", json={"email": "jean.parent@test.cd", "password": "password123"})
+    login = client.post("/api/v1/auth/login", json={"email": "jean.parent@test.cd", "password": "password123", "school_id": ctx["school"].id})
     assert login.status_code == 200
 
     children = client.get("/api/v1/parent/children")
@@ -54,7 +54,7 @@ def test_parent_sees_only_own_children(client, db_session):
 
 def test_parent_cannot_access_another_parents_child(client, db_session):
     ctx = _setup(db_session)
-    client.post("/api/v1/auth/login", json={"email": "jean.parent@test.cd", "password": "password123"})
+    client.post("/api/v1/auth/login", json={"email": "jean.parent@test.cd", "password": "password123", "school_id": ctx["school"].id})
 
     for path in ("grades", "attendance", "invoices", "payments"):
         resp = client.get(f"/api/v1/parent/children/{ctx['other_child'].id}/{path}")
@@ -65,7 +65,7 @@ def test_parent_cannot_access_another_parents_child(client, db_session):
 
 
 def test_parent_blocked_from_raw_students_endpoint(client, db_session):
-    _setup(db_session)
-    client.post("/api/v1/auth/login", json={"email": "jean.parent@test.cd", "password": "password123"})
+    ctx = _setup(db_session)
+    client.post("/api/v1/auth/login", json={"email": "jean.parent@test.cd", "password": "password123", "school_id": ctx["school"].id})
     resp = client.get("/api/v1/students")
     assert resp.status_code == 403

@@ -44,13 +44,20 @@ def test_super_admin_can_list_and_manage_schools(client, db_session):
 def test_non_super_admin_cannot_manage_schools(client, db_session):
     school = School(nom="École C", adresse="Kinshasa", telephone="+243", date_creation=date(2024, 1, 1))
     db_session.add(school)
+    db_session.flush()
+
+    admin = User(
+        school_id=school.id, nom="Admin", email="admin.c@test.cd",
+        password_hash=hash_password("password123"), telephone="", role=Role.school_admin, statut=UserStatus.actif,
+    )
+    db_session.add(admin)
     db_session.commit()
 
-    signup = client.post(
-        "/api/v1/auth/signup",
-        json={"nom": "Admin", "email": "admin.c@test.cd", "password": "password123", "role": "school_admin", "school_id": school.id},
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "admin.c@test.cd", "password": "password123", "school_id": school.id},
     )
-    assert signup.status_code == 200
+    assert login.status_code == 200
 
     resp = client.get("/api/v1/admin/schools")
     assert resp.status_code == 403

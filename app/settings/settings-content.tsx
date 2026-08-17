@@ -1,10 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { School, Users, Calendar, Save, Upload, Shield, UserCog, Calculator, BookOpen, Mail, Lock, Bell, Loader2, CheckCircle2, Layers, Plus, Pencil, Trash2, GraduationCap } from 'lucide-react';
+import { School, Users, Calendar, Save, Upload, Shield, UserCog, Calculator, BookOpen, Mail, Lock, Bell, Loader2, CheckCircle2, Layers, Plus, Pencil, Trash2, GraduationCap, Power } from 'lucide-react';
 import {
   fetchSchools,
   fetchUsers,
+  createUser,
+  updateUser,
+  resetUserPassword,
+  type UserUpdateInput,
   fetchAcademicYears,
   createAcademicYear,
   activateAcademicYear,
@@ -37,6 +41,19 @@ import { cn } from '@/lib/utils';
 const emptyYearForm = { libelle: '', date_debut: '', date_fin: '', activate: false };
 const emptyCycleForm = { nom: '', ordre: 0, evaluation_mode: 'notes' as 'notes' | 'qualitatif' };
 const emptyLevelForm = { cycle_id: '', nom: '', ordre: 0 };
+const emptyUserForm = { nom: '', email: '', password: '', telephone: '', role: 'secretary' as 'school_admin' | 'secretary' | 'accountant' | 'teacher' | 'parent' };
+const creatableRoles: { value: 'school_admin' | 'secretary' | 'accountant' | 'teacher' | 'parent'; label: string }[] = [
+  { value: 'school_admin', label: 'Directeur' },
+  { value: 'secretary', label: 'Secrétariat' },
+  { value: 'accountant', label: 'Comptable' },
+  { value: 'teacher', label: 'Enseignant' },
+  { value: 'parent', label: 'Parent' },
+];
+const editableRoles: { value: 'school_admin' | 'secretary' | 'accountant'; label: string }[] = [
+  { value: 'school_admin', label: 'Directeur' },
+  { value: 'secretary', label: 'Secrétariat' },
+  { value: 'accountant', label: 'Comptable' },
+];
 
 type Tab = 'school' | 'hierarchy' | 'users' | 'years' | 'security';
 
@@ -80,6 +97,18 @@ export function SettingsContent() {
   const [levelForm, setLevelForm] = useState(emptyLevelForm);
   const [savingLevel, setSavingLevel] = useState(false);
   const [hierarchyError, setHierarchyError] = useState('');
+
+  const [showUserDialog, setShowUserDialog] = useState(false);
+  const [userForm, setUserForm] = useState(emptyUserForm);
+  const [savingUser, setSavingUser] = useState(false);
+  const [userError, setUserError] = useState('');
+  const [editingUser, setEditingUser] = useState<Awaited<ReturnType<typeof fetchUsers>>[number] | null>(null);
+  const [editRole, setEditRole] = useState<'school_admin' | 'secretary' | 'accountant'>('secretary');
+  const [editStatut, setEditStatut] = useState<'actif' | 'inactif'>('actif');
+  const [editPassword, setEditPassword] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [togglingUserId, setTogglingUserId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -235,6 +264,68 @@ export function SettingsContent() {
       setLevels(prev => prev.filter(l => l.id !== id));
     } catch (err) {
       setHierarchyError(err instanceof ApiError ? err.message : 'Échec de la suppression du niveau.');
+    }
+  };
+
+  const openCreateUser = () => {
+    setUserForm(emptyUserForm);
+    setUserError('');
+    setShowUserDialog(true);
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userForm.nom.trim() || !userForm.email.trim() || userForm.password.length < 6) return;
+    setSavingUser(true);
+    setUserError('');
+    try {
+      const created = await createUser(userForm);
+      setUsers(prev => [...prev, created].sort((a, b) => a.nom.localeCompare(b.nom)));
+      setShowUserDialog(false);
+    } catch (err) {
+      setUserError(err instanceof ApiError ? err.message : 'Échec de la création de l\'utilisateur.');
+    } finally {
+      setSavingUser(false);
+    }
+  };
+
+  const openEditUser = (u: Awaited<ReturnType<typeof fetchUsers>>[number]) => {
+    setEditingUser(u);
+    setEditRole((['school_admin', 'secretary', 'accountant'].includes(u.role) ? u.role : 'secretary') as 'school_admin' | 'secretary' | 'accountant');
+    setEditStatut(u.statut as 'actif' | 'inactif');
+    setEditPassword('');
+    setEditError('');
+  };
+
+  const handleSaveEditUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    setSavingEdit(true);
+    setEditError('');
+    try {
+      const roleIsManagedHere = !['teacher', 'parent'].includes(editingUser.role);
+      const updates: UserUpdateInput = { statut: editStatut };
+      if (roleIsManagedHere) updates.role = editRole;
+      const updated = await updateUser(editingUser.id, updates);
+      if (editPassword.trim()) await resetUserPassword(editingUser.id, editPassword.trim());
+      setUsers(prev => prev.map(u => (u.id === updated.id ? updated : u)));
+      setEditingUser(null);
+    } catch (err) {
+      setEditError(err instanceof ApiError ? err.message : 'Échec de la mise à jour.');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleToggleUserStatut = async (u: Awaited<ReturnType<typeof fetchUsers>>[number]) => {
+    setTogglingUserId(u.id);
+    try {
+      const updated = await updateUser(u.id, { statut: u.statut === 'actif' ? 'inactif' : 'actif' });
+      setUsers(prev => prev.map(x => (x.id === updated.id ? updated : x)));
+    } catch (err) {
+      console.error('Failed to toggle user status:', err);
+    } finally {
+      setTogglingUserId(null);
     }
   };
 
@@ -471,56 +562,170 @@ export function SettingsContent() {
       )}
 
       {tab === 'users' && (
-        <Card className="overflow-hidden rounded-2xl shadow-card">
-          <div className="p-4 border-b border-border flex items-center justify-between gap-2">
-            <h3 className="font-semibold text-foreground truncate">Utilisateurs et permissions</h3>
-            <Button size="sm" className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform shrink-0">
-              <Users className="h-4 w-4" /> <span className="hidden sm:inline">Inviter</span>
-            </Button>
-          </div>
-          <div className="overflow-x-auto scrollbar-thin">
-            <table className="w-full min-w-[640px]">
-              <thead>
-                <tr className="border-b border-border bg-muted/30">
-                  <th className="text-left text-xs font-semibold text-muted-foreground uppercase px-4 py-3">Utilisateur</th>
-                  <th className="text-left text-xs font-semibold text-muted-foreground uppercase px-4 py-3">Email</th>
-                  <th className="text-left text-xs font-semibold text-muted-foreground uppercase px-4 py-3">Rôle</th>
-                  <th className="text-center text-xs font-semibold text-muted-foreground uppercase px-4 py-3">Statut</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {users.map(u => {
-                  const RoleIcon = roleIcons[u.role as Role] || Users;
-                  return (
-                    <tr key={u.id} className="hover:bg-muted/30 transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-semibold shrink-0">
-                            {u.nom.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+        <>
+          <Dialog open={showUserDialog} onOpenChange={setShowUserDialog}>
+            <DialogContent className="rounded-2xl">
+              <DialogHeader>
+                <DialogTitle>Nouvel utilisateur</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleCreateUser} className="space-y-3">
+                <div>
+                  <Label htmlFor="u-nom">Nom complet *</Label>
+                  <Input id="u-nom" value={userForm.nom} onChange={e => setUserForm({ ...userForm, nom: e.target.value })} required className="mt-1.5 rounded-xl" />
+                </div>
+                <div>
+                  <Label htmlFor="u-email">Email *</Label>
+                  <Input id="u-email" type="email" value={userForm.email} onChange={e => setUserForm({ ...userForm, email: e.target.value })} required className="mt-1.5 rounded-xl" />
+                </div>
+                <div>
+                  <Label htmlFor="u-password">Mot de passe *</Label>
+                  <Input id="u-password" type="password" minLength={6} value={userForm.password} onChange={e => setUserForm({ ...userForm, password: e.target.value })} required className="mt-1.5 rounded-xl" />
+                </div>
+                <div>
+                  <Label htmlFor="u-telephone">Téléphone</Label>
+                  <Input id="u-telephone" value={userForm.telephone} onChange={e => setUserForm({ ...userForm, telephone: e.target.value })} className="mt-1.5 rounded-xl" />
+                </div>
+                <div>
+                  <Label htmlFor="u-role">Rôle *</Label>
+                  <select
+                    id="u-role"
+                    value={userForm.role}
+                    onChange={e => setUserForm({ ...userForm, role: e.target.value as typeof userForm.role })}
+                    className="mt-1.5 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    {creatableRoles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                  </select>
+                  {(userForm.role === 'teacher' || userForm.role === 'parent') && (
+                    <p className="mt-1.5 text-xs text-muted-foreground">
+                      Un profil {userForm.role === 'teacher' ? 'enseignant' : 'parent'} minimal sera créé automatiquement — complétez-le depuis la page {userForm.role === 'teacher' ? 'Enseignants' : 'Parents'}.
+                    </p>
+                  )}
+                </div>
+                {userError && <div className="rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive">{userError}</div>}
+                <DialogFooter>
+                  <Button type="submit" disabled={savingUser} className="rounded-xl active:scale-[0.97] transition-transform">
+                    {savingUser ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Créer'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={!!editingUser} onOpenChange={open => !open && setEditingUser(null)}>
+            <DialogContent className="rounded-2xl">
+              <DialogHeader>
+                <DialogTitle>Modifier {editingUser?.nom}</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleSaveEditUser} className="space-y-3">
+                {editingUser && !['teacher', 'parent'].includes(editingUser.role) ? (
+                  <div>
+                    <Label htmlFor="eu-role">Rôle</Label>
+                    <select
+                      id="eu-role"
+                      value={editRole}
+                      onChange={e => setEditRole(e.target.value as typeof editRole)}
+                      className="mt-1.5 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      {editableRoles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                    </select>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Rôle {editingUser ? roleLabels[editingUser.role as Role] : ''} — se modifie depuis la page {editingUser?.role === 'teacher' ? 'Enseignants' : 'Parents'}.
+                  </p>
+                )}
+                <div>
+                  <Label htmlFor="eu-statut">Statut</Label>
+                  <select
+                    id="eu-statut"
+                    value={editStatut}
+                    onChange={e => setEditStatut(e.target.value as 'actif' | 'inactif')}
+                    className="mt-1.5 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="actif">Actif</option>
+                    <option value="inactif">Inactif</option>
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="eu-password">Nouveau mot de passe (optionnel)</Label>
+                  <Input id="eu-password" type="password" minLength={6} value={editPassword} onChange={e => setEditPassword(e.target.value)} placeholder="Laisser vide pour ne pas changer" className="mt-1.5 rounded-xl" />
+                </div>
+                {editError && <div className="rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive">{editError}</div>}
+                <DialogFooter>
+                  <Button type="submit" disabled={savingEdit} className="rounded-xl active:scale-[0.97] transition-transform">
+                    {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Enregistrer'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          <Card className="overflow-hidden rounded-2xl shadow-card">
+            <div className="p-4 border-b border-border flex items-center justify-between gap-2">
+              <h3 className="font-semibold text-foreground truncate">Utilisateurs et permissions</h3>
+              <Button size="sm" onClick={openCreateUser} className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform shrink-0">
+                <Users className="h-4 w-4" /> <span className="hidden sm:inline">Inviter</span>
+              </Button>
+            </div>
+            <div className="overflow-x-auto scrollbar-thin">
+              <table className="w-full min-w-[720px]">
+                <thead>
+                  <tr className="border-b border-border bg-muted/30">
+                    <th className="text-left text-xs font-semibold text-muted-foreground uppercase px-4 py-3">Utilisateur</th>
+                    <th className="text-left text-xs font-semibold text-muted-foreground uppercase px-4 py-3">Email</th>
+                    <th className="text-left text-xs font-semibold text-muted-foreground uppercase px-4 py-3">Rôle</th>
+                    <th className="text-center text-xs font-semibold text-muted-foreground uppercase px-4 py-3">Statut</th>
+                    <th className="text-right text-xs font-semibold text-muted-foreground uppercase px-4 py-3">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {users.map(u => {
+                    const RoleIcon = roleIcons[u.role as Role] || Users;
+                    return (
+                      <tr key={u.id} className="hover:bg-muted/30 transition-colors">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-semibold shrink-0">
+                              {u.nom.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+                            </div>
+                            <span className="text-sm font-medium text-foreground truncate">{u.nom}</span>
                           </div>
-                          <span className="text-sm font-medium text-foreground truncate">{u.nom}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground truncate max-w-[200px]">{u.email}</td>
-                      <td className="px-4 py-3">
-                        <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
-                          <RoleIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> <span className="truncate">{roleLabels[u.role as Role]}</span>
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={cn('badge-modern inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium',
-                          u.statut === 'actif' ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
-                        )}>
-                          {u.statut === 'actif' ? 'Actif' : 'Inactif'}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground truncate max-w-[200px]">{u.email}</td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
+                            <RoleIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> <span className="truncate">{roleLabels[u.role as Role]}</span>
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={cn('badge-modern inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium',
+                            u.statut === 'actif' ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
+                          )}>
+                            {u.statut === 'actif' ? 'Actif' : 'Inactif'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button variant="ghost" size="sm" onClick={() => openEditUser(u)} title="Modifier" className="h-7 w-7 p-0 rounded-lg active:scale-95 transition-transform">
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost" size="sm" onClick={() => handleToggleUserStatut(u)} disabled={togglingUserId === u.id}
+                              title={u.statut === 'actif' ? 'Désactiver' : 'Activer'}
+                              className="h-7 w-7 p-0 rounded-lg active:scale-95 transition-transform"
+                            >
+                              {togglingUserId === u.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Power className="h-3.5 w-3.5" />}
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </>
       )}
 
       {tab === 'years' && (

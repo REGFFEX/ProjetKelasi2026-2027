@@ -1,25 +1,27 @@
 from datetime import date
 
 from app.models.school import School
+from app.models.user import Role, User, UserStatus
+from app.security import hash_password
 
 
 def setup_school_and_student(client, db_session):
     school = School(nom="Payments School", adresse="Kinshasa", telephone="+243", date_creation=date(2024, 1, 1))
     db_session.add(school)
-    db_session.commit()
-    db_session.refresh(school)
+    db_session.flush()
 
-    signup_resp = client.post(
-        "/api/v1/auth/signup",
-        json={
-            "nom": "Admin",
-            "email": "admin.pay@test.cd",
-            "password": "password123",
-            "role": "school_admin",
-            "school_id": school.id,
-        },
+    admin = User(
+        school_id=school.id, nom="Admin", email="admin.pay@test.cd", password_hash=hash_password("password123"),
+        telephone="", role=Role.school_admin, statut=UserStatus.actif,
     )
-    assert signup_resp.status_code == 200
+    db_session.add(admin)
+    db_session.commit()
+
+    login_resp = client.post(
+        "/api/v1/auth/login",
+        json={"email": "admin.pay@test.cd", "password": "password123", "school_id": school.id},
+    )
+    assert login_resp.status_code == 200
 
     student_resp = client.post(
         "/api/v1/students",

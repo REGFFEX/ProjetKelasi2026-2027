@@ -15,6 +15,8 @@ class TeacherCreate(BaseModel):
     telephone: str = ""
     statut: UserStatus = UserStatus.actif
     assignments: list[AssignmentPair] = []
+    # Optional: also provision a login account for this teacher (email/password above).
+    password: str | None = None
 
 
 class TeacherUpdate(BaseModel):
@@ -24,6 +26,8 @@ class TeacherUpdate(BaseModel):
     telephone: str | None = None
     statut: UserStatus | None = None
     assignments: list[AssignmentPair] | None = None
+    # Set to grant/reset this teacher's login password (creates the account if none exists yet).
+    password: str | None = None
 
 
 class TeacherOut(BaseModel):

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Mail, Phone, BookOpen, School, CheckCircle2, XCircle, Loader2, X } from 'lucide-react';
+import { Plus, Mail, Phone, BookOpen, School, CheckCircle2, XCircle, Loader2, X, KeyRound } from 'lucide-react';
 import { fetchTeachers, fetchSubjects, fetchClassrooms, createTeacher, type AssignmentPairInput } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,6 +29,8 @@ export function TeachersContent() {
   const [form, setForm] = useState(emptyTeacherForm);
   const [pendingSubjectId, setPendingSubjectId] = useState('');
   const [pendingClassroomId, setPendingClassroomId] = useState('');
+  const [withLogin, setWithLogin] = useState(false);
+  const [loginPassword, setLoginPassword] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -78,11 +80,14 @@ export function TeachersContent() {
   const handleCreateTeacher = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.nom.trim() || !form.prenom.trim() || !form.email.trim()) return;
+    if (withLogin && loginPassword.length < 6) return;
     setCreating(true);
     try {
-      const created = await createTeacher(form);
+      const created = await createTeacher(withLogin ? { ...form, password: loginPassword } : form);
       setTeachers(prev => [...prev, created].sort((a, b) => a.nom.localeCompare(b.nom)));
       setForm(emptyTeacherForm);
+      setWithLogin(false);
+      setLoginPassword('');
       setShowCreate(false);
     } catch (err) {
       console.error('Failed to create teacher:', err);
@@ -126,6 +131,18 @@ export function TeachersContent() {
             <div>
               <Label htmlFor="t-telephone">Téléphone</Label>
               <Input id="t-telephone" value={form.telephone} onChange={e => setForm({ ...form, telephone: e.target.value })} className="mt-1.5 rounded-xl" />
+            </div>
+            <div className="rounded-xl border border-border p-3">
+              <label className="flex items-center gap-2.5 text-sm cursor-pointer">
+                <input type="checkbox" checked={withLogin} onChange={e => setWithLogin(e.target.checked)} className="rounded border-input" />
+                <span className="font-medium text-foreground">Créer un accès de connexion</span>
+              </label>
+              {withLogin && (
+                <div className="mt-2.5">
+                  <Label htmlFor="t-password">Mot de passe *</Label>
+                  <Input id="t-password" type="password" minLength={6} value={loginPassword} onChange={e => setLoginPassword(e.target.value)} required={withLogin} className="mt-1.5 rounded-xl" />
+                </div>
+              )}
             </div>
             <div>
               <Label className="mb-1.5 block">Affectations (matière → classe) *</Label>
@@ -189,13 +206,20 @@ export function TeachersContent() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-foreground truncate">{t.prenom} {t.nom}</p>
-                <span className={cn(
-                  'badge-modern inline-flex items-center gap-1 mt-1 text-xs font-medium',
-                  t.statut === 'actif' ? 'text-success' : 'text-muted-foreground'
-                )}>
-                  {t.statut === 'actif' ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
-                  {t.statut === 'actif' ? 'Actif' : 'Inactif'}
-                </span>
+                <div className="flex items-center gap-2 flex-wrap mt-1">
+                  <span className={cn(
+                    'badge-modern inline-flex items-center gap-1 text-xs font-medium',
+                    t.statut === 'actif' ? 'text-success' : 'text-muted-foreground'
+                  )}>
+                    {t.statut === 'actif' ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
+                    {t.statut === 'actif' ? 'Actif' : 'Inactif'}
+                  </span>
+                  {t.user_id && (
+                    <span className="badge-modern inline-flex items-center gap-1 text-xs font-medium text-primary" title="Compte de connexion actif">
+                      <KeyRound className="h-3 w-3" /> Connexion
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 

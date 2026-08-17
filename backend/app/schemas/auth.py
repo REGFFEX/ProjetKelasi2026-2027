@@ -1,20 +1,13 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr
 
 from app.models.user import Role, UserStatus
-
-
-class SignupRequest(BaseModel):
-    nom: str = Field(min_length=1)
-    email: EmailStr
-    password: str = Field(min_length=6)
-    telephone: str = ""
-    role: Role
-    school_id: str
 
 
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+    # None = platform login (super_admin, no tenant). A value scopes the lookup to that school.
+    school_id: str | None = None
 
 
 class UserOut(BaseModel):

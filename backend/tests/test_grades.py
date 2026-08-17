@@ -2,23 +2,25 @@ from datetime import date
 
 from app.models.academic import AcademicYear, AcademicYearStatus, Cycle, EvaluationMode, Level, Term
 from app.models.school import School
+from app.models.user import Role, User, UserStatus
+from app.security import hash_password
 
 
 def setup_school_admin(client, db_session):
     school = School(nom="Grades School", adresse="Kinshasa", telephone="+243", date_creation=date(2024, 1, 1))
     db_session.add(school)
+    db_session.flush()
+
+    admin = User(
+        school_id=school.id, nom="Admin", email="admin.grades@test.cd", password_hash=hash_password("password123"),
+        telephone="", role=Role.school_admin, statut=UserStatus.actif,
+    )
+    db_session.add(admin)
     db_session.commit()
-    db_session.refresh(school)
 
     resp = client.post(
-        "/api/v1/auth/signup",
-        json={
-            "nom": "Admin",
-            "email": "admin.grades@test.cd",
-            "password": "password123",
-            "role": "school_admin",
-            "school_id": school.id,
-        },
+        "/api/v1/auth/login",
+        json={"email": "admin.grades@test.cd", "password": "password123", "school_id": school.id},
     )
     assert resp.status_code == 200
     return school

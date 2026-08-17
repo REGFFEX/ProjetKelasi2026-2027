@@ -18,15 +18,7 @@ export interface UserProfile {
 interface AuthContextValue {
   profile: UserProfile | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (
-    email: string,
-    password: string,
-    nom: string,
-    telephone: string,
-    role: Role,
-    schoolId: string
-  ) => Promise<{ error: string | null }>;
+  signIn: (email: string, password: string, schoolId: string | null) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -34,10 +26,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 function friendlyError(message: string): string {
   if (message.includes('Identifiants incorrects')) {
-    return 'Identifiants incorrects. Si vous n\'avez pas encore de compte, cliquez sur "Créer un compte".';
-  }
-  if (message.includes('existe déjà')) {
-    return 'Un compte avec cet email existe déjà. Veuillez vous connecter.';
+    return 'Identifiants incorrects. Vérifiez votre école, votre email et votre mot de passe.';
   }
   return message;
 }
@@ -61,9 +50,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loadProfile();
   }, [loadProfile]);
 
-  const signIn = useCallback(async (email: string, password: string) => {
+  const signIn = useCallback(async (email: string, password: string, schoolId: string | null) => {
     try {
-      const data = await apiPost<UserProfile>('/auth/login', { email, password });
+      const data = await apiPost<UserProfile>('/auth/login', { email, password, school_id: schoolId });
       setProfile(data);
       return { error: null };
     } catch (err) {
@@ -71,27 +60,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: friendlyError(message) };
     }
   }, []);
-
-  const signUp = useCallback(
-    async (email: string, password: string, nom: string, telephone: string, role: Role, schoolId: string) => {
-      try {
-        const data = await apiPost<UserProfile>('/auth/signup', {
-          email,
-          password,
-          nom,
-          telephone,
-          role,
-          school_id: schoolId,
-        });
-        setProfile(data);
-        return { error: null };
-      } catch (err) {
-        const message = err instanceof ApiError ? err.message : 'Erreur de connexion au serveur.';
-        return { error: friendlyError(message) };
-      }
-    },
-    []
-  );
 
   const signOut = useCallback(async () => {
     try {
@@ -102,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ profile, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ profile, loading, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );
