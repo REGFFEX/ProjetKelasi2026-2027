@@ -406,6 +406,32 @@ export async function fetchSchools(): Promise<DbSchool[]> {
   }));
 }
 
+// ── Super admin: manage all schools + subscriptions ──────────
+
+export interface DbSchoolAdmin {
+  id: string;
+  nom: string;
+  logo: string | null;
+  adresse: string;
+  telephone: string;
+  statut_abonnement: 'actif' | 'essai' | 'expire';
+  date_creation: string;
+  student_count: number;
+  user_count: number;
+}
+
+export interface SchoolAdminInput {
+  nom: string;
+  adresse?: string;
+  telephone?: string;
+  statut_abonnement?: 'actif' | 'essai' | 'expire';
+}
+
+export const fetchAllSchoolsAdmin = () => apiGet<DbSchoolAdmin[]>('/admin/schools');
+export const createSchoolAdmin = (school: SchoolAdminInput) => apiPost<DbSchoolAdmin>('/admin/schools', school);
+export const updateSchoolAdmin = (id: string, updates: Partial<SchoolAdminInput>) =>
+  apiPatch<DbSchoolAdmin>(`/admin/schools/${id}`, updates);
+
 // ── Parent portal (scoped to the logged-in parent's own children) ──
 
 export const fetchMyChildren = () => apiGet<DbStudent[]>('/parent/children');

@@ -9,7 +9,10 @@ from app.models.base import Base, UUIDPKMixin, utcnow
 class AuditLog(Base, UUIDPKMixin):
     __tablename__ = "audit_logs"
 
-    school_id: Mapped[str] = mapped_column(CHAR(36), ForeignKey("schools.id", ondelete="CASCADE"), index=True)
+    # Nullable: platform-level super_admin actions (e.g. creating a school) aren't scoped to one tenant.
+    school_id: Mapped[str | None] = mapped_column(
+        CHAR(36), ForeignKey("schools.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     user_id: Mapped[str | None] = mapped_column(
         CHAR(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

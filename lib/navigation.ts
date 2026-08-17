@@ -8,7 +8,6 @@ export interface NavItem {
 
 export const navItemsByRole: Record<Role, NavItem[]> = {
   super_admin: [
-    { label: 'Tableau de bord', href: '/dashboard', icon: 'LayoutDashboard' },
     { label: 'Écoles', href: '/schools', icon: 'School' },
     { label: 'Abonnements', href: '/subscriptions', icon: 'CreditCard' },
     { label: 'Paramètres', href: '/settings', icon: 'Settings' },
@@ -66,6 +65,7 @@ export const roleLabels: Record<Role, string> = {
 export function getDefaultRouteForRole(role?: Role): string {
   switch (role) {
     case 'super_admin':
+      return '/schools';
     case 'school_admin':
       return '/dashboard';
     case 'secretary':

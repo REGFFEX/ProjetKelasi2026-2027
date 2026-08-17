@@ -1,8 +1,22 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { School, Users, Calendar, Save, Upload, Shield, UserCog, Calculator, BookOpen, Mail, Lock, Bell, Loader2, CheckCircle2 } from 'lucide-react';
-import { fetchSchools, fetchUsers, fetchAcademicYears, createAcademicYear, activateAcademicYear } from '@/lib/api';
+import { School, Users, Calendar, Save, Upload, Shield, UserCog, Calculator, BookOpen, Mail, Lock, Bell, Loader2, CheckCircle2, Layers, Plus, Pencil, Trash2, GraduationCap } from 'lucide-react';
+import {
+  fetchSchools,
+  fetchUsers,
+  fetchAcademicYears,
+  createAcademicYear,
+  activateAcademicYear,
+  fetchCycles,
+  createCycle,
+  updateCycle,
+  deleteCycle,
+  fetchLevels,
+  createLevel,
+  updateLevel,
+  deleteLevel,
+} from '@/lib/api';
 import { ApiError } from '@/lib/api-client';
 import { roleLabels } from '@/lib/navigation';
 import type { Role } from '@/lib/types';
@@ -21,11 +35,14 @@ import {
 import { cn } from '@/lib/utils';
 
 const emptyYearForm = { libelle: '', date_debut: '', date_fin: '', activate: false };
+const emptyCycleForm = { nom: '', ordre: 0, evaluation_mode: 'notes' as 'notes' | 'qualitatif' };
+const emptyLevelForm = { cycle_id: '', nom: '', ordre: 0 };
 
-type Tab = 'school' | 'users' | 'years' | 'security';
+type Tab = 'school' | 'hierarchy' | 'users' | 'years' | 'security';
 
 const tabs = [
   { id: 'school' as Tab, label: 'Établissement', icon: School },
+  { id: 'hierarchy' as Tab, label: 'Cycles & Niveaux', icon: Layers },
   { id: 'users' as Tab, label: 'Utilisateurs', icon: Users },
   { id: 'years' as Tab, label: 'Années scolaires', icon: Calendar },
   { id: 'security' as Tab, label: 'Sécurité', icon: Shield },
@@ -52,15 +69,35 @@ export function SettingsContent() {
   const [activatingId, setActivatingId] = useState<string | null>(null);
   const [yearError, setYearError] = useState('');
 
+  const [cycles, setCycles] = useState<Awaited<ReturnType<typeof fetchCycles>>>([]);
+  const [levels, setLevels] = useState<Awaited<ReturnType<typeof fetchLevels>>>([]);
+  const [showCycleDialog, setShowCycleDialog] = useState(false);
+  const [editingCycleId, setEditingCycleId] = useState<string | null>(null);
+  const [cycleForm, setCycleForm] = useState(emptyCycleForm);
+  const [savingCycle, setSavingCycle] = useState(false);
+  const [showLevelDialog, setShowLevelDialog] = useState(false);
+  const [editingLevelId, setEditingLevelId] = useState<string | null>(null);
+  const [levelForm, setLevelForm] = useState(emptyLevelForm);
+  const [savingLevel, setSavingLevel] = useState(false);
+  const [hierarchyError, setHierarchyError] = useState('');
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [s, u, y] = await Promise.all([fetchSchools(), fetchUsers(), fetchAcademicYears()]);
+        const [s, u, y, cyc, lvl] = await Promise.all([
+          fetchSchools(),
+          fetchUsers(),
+          fetchAcademicYears(),
+          fetchCycles(),
+          fetchLevels(),
+        ]);
         if (cancelled) return;
         setSchools(s);
         setUsers(u as { id: string; school_id: string; nom: string; email: string; telephone: string; role: Role; statut: string }[]);
         setAcademicYears(y);
+        setCycles(cyc.sort((a, b) => a.ordre - b.ordre));
+        setLevels(lvl.sort((a, b) => a.ordre - b.ordre));
       } catch (e) {
         console.error('Failed to load settings data:', e);
       } finally {
@@ -110,6 +147,94 @@ export function SettingsContent() {
       setYearError(err instanceof ApiError ? err.message : 'Échec de l\'activation.');
     } finally {
       setActivatingId(null);
+    }
+  };
+
+  const openCreateCycle = () => {
+    setEditingCycleId(null);
+    setCycleForm(emptyCycleForm);
+    setShowCycleDialog(true);
+  };
+
+  const openEditCycle = (c: Awaited<ReturnType<typeof fetchCycles>>[number]) => {
+    setEditingCycleId(c.id);
+    setCycleForm({ nom: c.nom, ordre: c.ordre, evaluation_mode: c.evaluation_mode });
+    setShowCycleDialog(true);
+  };
+
+  const handleSaveCycle = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cycleForm.nom.trim()) return;
+    setSavingCycle(true);
+    setHierarchyError('');
+    try {
+      if (editingCycleId) {
+        const updated = await updateCycle(editingCycleId, cycleForm);
+        setCycles(prev => prev.map(c => (c.id === updated.id ? updated : c)));
+      } else {
+        const created = await createCycle(cycleForm);
+        setCycles(prev => [...prev, created].sort((a, b) => a.ordre - b.ordre));
+      }
+      setShowCycleDialog(false);
+    } catch (err) {
+      setHierarchyError(err instanceof ApiError ? err.message : 'Échec de l\'enregistrement du cycle.');
+    } finally {
+      setSavingCycle(false);
+    }
+  };
+
+  const handleDeleteCycle = async (id: string) => {
+    if (!window.confirm('Supprimer ce cycle ? Les niveaux qui en dépendent doivent être supprimés séparément.')) return;
+    setHierarchyError('');
+    try {
+      await deleteCycle(id);
+      setCycles(prev => prev.filter(c => c.id !== id));
+    } catch (err) {
+      setHierarchyError(err instanceof ApiError ? err.message : 'Échec de la suppression du cycle.');
+    }
+  };
+
+  const openCreateLevel = (cycleId?: string) => {
+    setEditingLevelId(null);
+    setLevelForm({ ...emptyLevelForm, cycle_id: cycleId || cycles[0]?.id || '' });
+    setShowLevelDialog(true);
+  };
+
+  const openEditLevel = (l: Awaited<ReturnType<typeof fetchLevels>>[number]) => {
+    setEditingLevelId(l.id);
+    setLevelForm({ cycle_id: l.cycle_id, nom: l.nom, ordre: l.ordre });
+    setShowLevelDialog(true);
+  };
+
+  const handleSaveLevel = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!levelForm.nom.trim() || !levelForm.cycle_id) return;
+    setSavingLevel(true);
+    setHierarchyError('');
+    try {
+      if (editingLevelId) {
+        const updated = await updateLevel(editingLevelId, levelForm);
+        setLevels(prev => prev.map(l => (l.id === updated.id ? updated : l)));
+      } else {
+        const created = await createLevel(levelForm);
+        setLevels(prev => [...prev, created].sort((a, b) => a.ordre - b.ordre));
+      }
+      setShowLevelDialog(false);
+    } catch (err) {
+      setHierarchyError(err instanceof ApiError ? err.message : 'Échec de l\'enregistrement du niveau.');
+    } finally {
+      setSavingLevel(false);
+    }
+  };
+
+  const handleDeleteLevel = async (id: string) => {
+    if (!window.confirm('Supprimer ce niveau ? Les classes qui en dépendent doivent être réaffectées séparément.')) return;
+    setHierarchyError('');
+    try {
+      await deleteLevel(id);
+      setLevels(prev => prev.filter(l => l.id !== id));
+    } catch (err) {
+      setHierarchyError(err instanceof ApiError ? err.message : 'Échec de la suppression du niveau.');
     }
   };
 
@@ -192,6 +317,157 @@ export function SettingsContent() {
             </Button>
           </div>
         </Card>
+      )}
+
+      {tab === 'hierarchy' && (
+        <>
+          <Dialog open={showCycleDialog} onOpenChange={setShowCycleDialog}>
+            <DialogContent className="rounded-2xl">
+              <DialogHeader>
+                <DialogTitle>{editingCycleId ? 'Modifier le cycle' : 'Nouveau cycle'}</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleSaveCycle} className="space-y-3">
+                <div>
+                  <Label htmlFor="cy-nom">Nom *</Label>
+                  <Input id="cy-nom" placeholder="ex: Préscolaire" value={cycleForm.nom} onChange={e => setCycleForm({ ...cycleForm, nom: e.target.value })} required className="mt-1.5 rounded-xl" />
+                </div>
+                <div>
+                  <Label htmlFor="cy-ordre">Ordre d'affichage</Label>
+                  <Input id="cy-ordre" type="number" min={0} value={cycleForm.ordre} onChange={e => setCycleForm({ ...cycleForm, ordre: parseInt(e.target.value, 10) || 0 })} className="mt-1.5 rounded-xl" />
+                </div>
+                <div>
+                  <Label htmlFor="cy-mode">Mode d'évaluation</Label>
+                  <select
+                    id="cy-mode"
+                    value={cycleForm.evaluation_mode}
+                    onChange={e => setCycleForm({ ...cycleForm, evaluation_mode: e.target.value as 'notes' | 'qualitatif' })}
+                    className="mt-1.5 w-full rounded-xl border border-input bg-muted/30 px-3 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 transition-all"
+                  >
+                    <option value="notes">Notes chiffrées (/20)</option>
+                    <option value="qualitatif">Appréciations qualitatives</option>
+                  </select>
+                  <p className="text-xs text-muted-foreground mt-1">Le mode qualitatif remplace la saisie de notes par des appréciations libres (ex: préscolaire).</p>
+                </div>
+                <DialogFooter>
+                  <Button type="submit" disabled={savingCycle} className="gap-1.5 rounded-xl">
+                    {savingCycle ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                    {editingCycleId ? 'Enregistrer' : 'Créer'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={showLevelDialog} onOpenChange={setShowLevelDialog}>
+            <DialogContent className="rounded-2xl">
+              <DialogHeader>
+                <DialogTitle>{editingLevelId ? 'Modifier le niveau' : 'Nouveau niveau'}</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleSaveLevel} className="space-y-3">
+                <div>
+                  <Label htmlFor="lv-cycle">Cycle *</Label>
+                  <select
+                    id="lv-cycle"
+                    value={levelForm.cycle_id}
+                    onChange={e => setLevelForm({ ...levelForm, cycle_id: e.target.value })}
+                    required
+                    className="mt-1.5 w-full rounded-xl border border-input bg-muted/30 px-3 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 transition-all"
+                  >
+                    <option value="">Sélectionner un cycle</option>
+                    {cycles.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="lv-nom">Nom *</Label>
+                  <Input id="lv-nom" placeholder="ex: CP, 6e, Terminale" value={levelForm.nom} onChange={e => setLevelForm({ ...levelForm, nom: e.target.value })} required className="mt-1.5 rounded-xl" />
+                </div>
+                <div>
+                  <Label htmlFor="lv-ordre">Ordre d'affichage</Label>
+                  <Input id="lv-ordre" type="number" min={0} value={levelForm.ordre} onChange={e => setLevelForm({ ...levelForm, ordre: parseInt(e.target.value, 10) || 0 })} className="mt-1.5 rounded-xl" />
+                </div>
+                <DialogFooter>
+                  <Button type="submit" disabled={savingLevel} className="gap-1.5 rounded-xl">
+                    {savingLevel ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                    {editingLevelId ? 'Enregistrer' : 'Créer'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h3 className="font-semibold text-foreground">Cycles & Niveaux</h3>
+              <p className="text-sm text-muted-foreground mt-0.5">École → Cycle → Niveau → Classe. Configurez la structure de votre établissement.</p>
+            </div>
+            <Button size="sm" onClick={openCreateCycle} className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform shrink-0">
+              <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nouveau cycle</span>
+            </Button>
+          </div>
+
+          {hierarchyError && (
+            <div className="rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive animate-fade-in">
+              {hierarchyError}
+            </div>
+          )}
+
+          {cycles.length === 0 && (
+            <p className="text-sm text-muted-foreground">Aucun cycle configuré pour le moment.</p>
+          )}
+
+          <div className="grid gap-3 sm:gap-4">
+            {cycles.map(cycle => (
+              <Card key={cycle.id} className="p-4 sm:p-5 rounded-2xl shadow-card">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0">
+                      <Layers className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-foreground truncate">{cycle.nom}</p>
+                      <Badge variant="secondary" className="badge-modern text-xs mt-0.5">
+                        {cycle.evaluation_mode === 'qualitatif' ? 'Appréciations qualitatives' : 'Notes /20'}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    <Button variant="ghost" size="sm" onClick={() => openEditCycle(cycle)} className="h-8 w-8 p-0 rounded-xl active:scale-95 transition-transform">
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => handleDeleteCycle(cycle.id)} className="h-8 w-8 p-0 rounded-xl text-destructive active:scale-95 transition-transform">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="pl-3 border-l-2 border-border space-y-1.5">
+                  {levels.filter(l => l.cycle_id === cycle.id).map(level => (
+                    <div key={level.id} className="flex items-center justify-between gap-2 rounded-xl px-3 py-2 hover:bg-muted/50 transition-colors">
+                      <span className="flex items-center gap-2 text-sm text-foreground min-w-0">
+                        <GraduationCap className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <span className="truncate">{level.nom}</span>
+                      </span>
+                      <div className="flex gap-1 shrink-0">
+                        <Button variant="ghost" size="sm" onClick={() => openEditLevel(level)} className="h-7 w-7 p-0 rounded-lg active:scale-95 transition-transform">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleDeleteLevel(level.id)} className="h-7 w-7 p-0 rounded-lg text-destructive active:scale-95 transition-transform">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => openCreateLevel(cycle.id)}
+                    className="flex items-center gap-2 text-sm text-primary px-3 py-2 rounded-xl hover:bg-primary/5 transition-colors w-full"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Ajouter un niveau
+                  </button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </>
       )}
 
       {tab === 'users' && (

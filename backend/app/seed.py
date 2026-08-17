@@ -40,17 +40,30 @@ def run() -> None:
         db.add(school)
         db.flush()
 
+        # Other tenants — gives the super_admin "toutes les écoles" view something real to show.
+        db.add_all([
+            School(
+                nom="Institut Saint-Michel", adresse="Bd du 30 Juin, Lubumbashi", telephone="+243 82 111 2222",
+                statut_abonnement=SubscriptionStatus.essai, date_creation=date(2026, 6, 1),
+            ),
+            School(
+                nom="Complexe Scolaire La Grâce", adresse="Av. Kasa-Vubu, Goma", telephone="+243 85 333 4444",
+                statut_abonnement=SubscriptionStatus.expire, date_creation=date(2023, 9, 1),
+            ),
+        ])
+
         demo_users = [
-            ("Joseph Kabasele", "joseph.kabasele@kelasi.com", "Admin@2026", Role.school_admin, "+243 81 000 0001"),
-            ("Marie Kalala", "marie.kalala@kelasi.com", "Secret@2026", Role.secretary, "+243 81 000 0002"),
-            ("Pierre Mbuyi", "pierre.mbuyi@kelasi.com", "Compta@2026", Role.accountant, "+243 81 000 0003"),
-            ("Esther Tshala", "esther.tshala@kelasi.com", "Prof@2026", Role.teacher, "+243 81 555 6666"),
-            ("Jean Mukendi", "jean.mukendi@kelasi.com", "Parent@2026", Role.parent, "+243 81 234 5678"),
+            ("Alphonse Ngoyi", "alphonse.ngoyi@kelasi.com", "Super@2026", Role.super_admin, "+243 81 000 0000", None),
+            ("Joseph Kabasele", "joseph.kabasele@kelasi.com", "Admin@2026", Role.school_admin, "+243 81 000 0001", school),
+            ("Marie Kalala", "marie.kalala@kelasi.com", "Secret@2026", Role.secretary, "+243 81 000 0002", school),
+            ("Pierre Mbuyi", "pierre.mbuyi@kelasi.com", "Compta@2026", Role.accountant, "+243 81 000 0003", school),
+            ("Esther Tshala", "esther.tshala@kelasi.com", "Prof@2026", Role.teacher, "+243 81 555 6666", school),
+            ("Jean Mukendi", "jean.mukendi@kelasi.com", "Parent@2026", Role.parent, "+243 81 234 5678", school),
         ]
         users = {}
-        for nom, email, password, role, telephone in demo_users:
+        for nom, email, password, role, telephone, user_school in demo_users:
             u = User(
-                school_id=school.id,
+                school_id=user_school.id if user_school else None,
                 nom=nom,
                 email=email,
                 password_hash=hash_password(password),
