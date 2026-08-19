@@ -18,7 +18,7 @@ export interface UserProfile {
 interface AuthContextValue {
   profile: UserProfile | null;
   loading: boolean;
-  signIn: (email: string, password: string, schoolId: string | null) => Promise<{ error: string | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -26,7 +26,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 function friendlyError(message: string): string {
   if (message.includes('Identifiants incorrects')) {
-    return 'Identifiants incorrects. Vérifiez votre école, votre email et votre mot de passe.';
+    return 'Identifiants incorrects. Vérifiez votre email et votre mot de passe.';
   }
   return message;
 }
@@ -50,9 +50,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loadProfile();
   }, [loadProfile]);
 
-  const signIn = useCallback(async (email: string, password: string, schoolId: string | null) => {
+  const signIn = useCallback(async (email: string, password: string) => {
     try {
-      const data = await apiPost<UserProfile>('/auth/login', { email, password, school_id: schoolId });
+      const data = await apiPost<UserProfile>('/auth/login', { email, password });
       setProfile(data);
       return { error: null };
     } catch (err) {

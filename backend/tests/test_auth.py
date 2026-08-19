@@ -74,6 +74,35 @@ def test_login_wrong_tenant_fails(client, db_session):
     assert resp.status_code == 401
 
 
+def test_login_without_school_id_resolves_by_email(client, db_session):
+    school = make_school(db_session)
+    make_user(db_session, school, "school_admin", "admin4@test.cd")
+
+    resp = client.post("/api/v1/auth/login", json={"email": "admin4@test.cd", "password": "password123"})
+    assert resp.status_code == 200
+    assert resp.json()["data"]["school_id"] == school.id
+
+
+def test_login_with_email_shared_across_schools_requires_disambiguation(client, db_session):
+    school_a = make_school(db_session)
+    school_b = School(nom="Other School", adresse="Kinshasa", telephone="+243", date_creation=date(2024, 1, 1))
+    db_session.add(school_b)
+    db_session.commit()
+    db_session.refresh(school_b)
+    make_user(db_session, school_a, "school_admin", "shared@test.cd")
+    make_user(db_session, school_b, "school_admin", "shared@test.cd")
+
+    ambiguous = client.post("/api/v1/auth/login", json={"email": "shared@test.cd", "password": "password123"})
+    assert ambiguous.status_code == 409
+
+    disambiguated = client.post(
+        "/api/v1/auth/login",
+        json={"email": "shared@test.cd", "password": "password123", "school_id": school_a.id},
+    )
+    assert disambiguated.status_code == 200
+    assert disambiguated.json()["data"]["school_id"] == school_a.id
+
+
 def test_role_mismatch_returns_403(client, db_session):
     school = make_school(db_session)
     make_user(db_session, school, "teacher", "teacher@test.cd", nom="Teacher Test")

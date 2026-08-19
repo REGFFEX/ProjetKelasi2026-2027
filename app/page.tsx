@@ -24,31 +24,19 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { getDefaultRouteForRole } from '@/lib/navigation';
-import { fetchSchools, type DbSchool } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
-const PLATFORM_OPTION = '__platform__';
-
 export default function LoginPage() {
   const router = useRouter();
   const { signIn, profile } = useAuth();
-  const [schools, setSchools] = useState<DbSchool[]>([]);
-  const [schoolId, setSchoolId] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    fetchSchools().then(rows => {
-      setSchools(rows);
-      setSchoolId(prev => prev || (rows.length > 0 ? rows[0].id : PLATFORM_OPTION));
-    }).catch(() => {});
-  }, []);
 
   // Redirect to the right home page based on the authenticated role
   useEffect(() => {
@@ -61,7 +49,7 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     setLoading(true);
-    const { error: signInError } = await signIn(email, password, schoolId === PLATFORM_OPTION ? null : schoolId);
+    const { error: signInError } = await signIn(email, password);
     if (signInError) {
       setError(signInError);
       setLoading(false);
@@ -166,25 +154,6 @@ export default function LoginPage() {
             </div>
 
             <form onSubmit={handleLogin} className="mt-7 space-y-4">
-              <div>
-                <Label htmlFor="school" className="mb-1.5 block text-foreground">École</Label>
-                <div className="relative">
-                  <Building2 className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <select
-                    id="school"
-                    value={schoolId}
-                    onChange={e => setSchoolId(e.target.value)}
-                    className="h-12 w-full rounded-[12px] border border-border bg-background pl-10 pr-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
-                    required
-                  >
-                    {schools.map(s => (
-                      <option key={s.id} value={s.id}>{s.nom}</option>
-                    ))}
-                    <option value={PLATFORM_OPTION}>Super Admin — Plateforme</option>
-                  </select>
-                </div>
-              </div>
-
               <div>
                 <Label htmlFor="email" className="mb-1.5 block text-foreground">Email</Label>
                 <div className="relative">

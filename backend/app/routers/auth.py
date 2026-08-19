@@ -13,17 +13,24 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.get("/schools")
-def list_schools_for_login(db: Session = Depends(get_db)):
-    """Public, minimal listing so the login form can offer a tenant (school) picker."""
+def list_schools(db: Session = Depends(get_db)):
+    """Public, minimal listing — used by the sidebar to display the current school's name."""
     schools = db.query(School).order_by(School.nom).all()
     return envelope([{"id": s.id, "nom": s.nom} for s in schools])
 
 
 @router.post("/login")
 def login(body: LoginRequest, response: Response, db: Session = Depends(get_db)):
+    # school_id disambiguates only if the same email exists in more than one tenant —
+    # the login form itself just asks for email/password, no tenant picker.
     query = db.query(User).filter(User.email == body.email)
-    query = query.filter(User.school_id == body.school_id) if body.school_id else query.filter(User.school_id.is_(None))
-    user = query.first()
+    if body.school_id:
+        query = query.filter(User.school_id == body.school_id)
+    matches = query.all()
+    if len(matches) > 1:
+        raise APIException(409, "Plusieurs comptes utilisent cet email. Contactez votre administrateur.")
+
+    user = matches[0] if matches else None
     if not user or not verify_password(body.password, user.password_hash):
         raise APIException(401, "Identifiants incorrects.")
     if user.statut != UserStatus.actif:
