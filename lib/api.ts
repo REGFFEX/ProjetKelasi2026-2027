@@ -473,6 +473,28 @@ export const updateSchoolAdmin = (id: string, updates: Partial<SchoolAdminInput>
 export const createSchoolAdminUser = (schoolId: string, user: { nom: string; email: string; password: string; telephone?: string }) =>
   apiPost<DbUser>(`/admin/schools/${schoolId}/admin`, { ...user, role: 'school_admin' });
 
+// ── Super admins (platform-level accounts, no school_id) ──────
+
+export interface SuperAdminCreateInput {
+  nom: string;
+  email: string;
+  password: string;
+  telephone?: string;
+}
+
+export interface SuperAdminUpdateInput {
+  nom?: string;
+  telephone?: string;
+  statut?: 'actif' | 'inactif';
+}
+
+export const fetchSuperAdmins = () => apiGet<DbUser[]>('/admin/super-admins');
+export const createSuperAdmin = (user: SuperAdminCreateInput) => apiPost<DbUser>('/admin/super-admins', user);
+export const updateSuperAdmin = (id: string, updates: SuperAdminUpdateInput) =>
+  apiPatch<DbUser>(`/admin/super-admins/${id}`, updates);
+export const resetSuperAdminPassword = (id: string, newPassword: string) =>
+  apiPost<void>(`/admin/super-admins/${id}/reset-password`, { new_password: newPassword });
+
 // ── Parent portal (scoped to the logged-in parent's own children) ──
 
 export const fetchMyChildren = () => apiGet<DbStudent[]>('/parent/children');

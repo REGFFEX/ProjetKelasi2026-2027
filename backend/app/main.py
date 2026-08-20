@@ -22,6 +22,7 @@ from app.routers import (
     parent,
     schools_admin,
     users,
+    super_admins,
 )
 
 app = FastAPI(title="Kelasi API")
@@ -55,6 +56,7 @@ app.include_router(assignments.router, prefix=API_PREFIX)
 app.include_router(parent.router, prefix=API_PREFIX)
 app.include_router(schools_admin.router, prefix=API_PREFIX)
 app.include_router(users.router, prefix=API_PREFIX)
+app.include_router(super_admins.router, prefix=API_PREFIX)
 
 
 @app.get("/health")

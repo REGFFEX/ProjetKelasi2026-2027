@@ -10,6 +10,7 @@ export const navItemsByRole: Record<Role, NavItem[]> = {
   super_admin: [
     { label: 'Écoles', href: '/schools', icon: 'School' },
     { label: 'Abonnements', href: '/subscriptions', icon: 'CreditCard' },
+    { label: 'Administrateurs', href: '/super-admins', icon: 'ShieldCheck' },
   ],
   school_admin: [
     { label: 'Tableau de bord', href: '/dashboard', icon: 'LayoutDashboard' },

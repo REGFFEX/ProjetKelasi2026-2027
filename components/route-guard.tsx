@@ -7,7 +7,7 @@ import { Loader2 } from 'lucide-react';
 import type { Role } from '@/lib/types';
 
 const roleAccess: Record<Role, string[]> = {
-  super_admin: ['/dashboard', '/schools', '/subscriptions', '/settings'],
+  super_admin: ['/schools', '/subscriptions', '/super-admins'],
   school_admin: ['/dashboard', '/students', '/parents', '/teachers', '/classes', '/attendance', '/grades', '/payments', '/communication', '/reports', '/settings'],
   secretary: ['/dashboard', '/students', '/parents', '/classes', '/communication'],
   accountant: ['/dashboard', '/payments', '/students', '/reports'],

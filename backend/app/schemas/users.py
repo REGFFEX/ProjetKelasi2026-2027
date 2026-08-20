@@ -20,3 +20,16 @@ class UserUpdate(BaseModel):
 
 class PasswordReset(BaseModel):
     new_password: str = Field(min_length=6)
+
+
+class SuperAdminCreate(BaseModel):
+    nom: str = Field(min_length=1)
+    email: EmailStr
+    password: str = Field(min_length=6)
+    telephone: str = ""
+
+
+class SuperAdminUpdate(BaseModel):
+    nom: str | None = None
+    telephone: str | None = None
+    statut: UserStatus | None = None
