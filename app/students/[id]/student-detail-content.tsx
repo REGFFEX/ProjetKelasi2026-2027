@@ -14,6 +14,8 @@ import {
   fetchGrades,
   fetchAssessments,
   fetchSubjects,
+  fetchTerms,
+  downloadStudentBulletin,
   formatMoney,
 } from '@/lib/api';
 import { Card } from '@/components/ui/card';
@@ -47,12 +49,15 @@ export function StudentDetailContent({ studentId }: { studentId: string }) {
   const [grades, setGrades] = useState<Awaited<ReturnType<typeof fetchGrades>>>([]);
   const [assessments, setAssessments] = useState<Awaited<ReturnType<typeof fetchAssessments>>>([]);
   const [subjects, setSubjects] = useState<Awaited<ReturnType<typeof fetchSubjects>>>([]);
+  const [terms, setTerms] = useState<Awaited<ReturnType<typeof fetchTerms>>>([]);
+  const [bulletinTermId, setBulletinTermId] = useState('');
+  const [downloadingBulletin, setDownloadingBulletin] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [s, p, docs, c, inv, pay, att, g, a, sub] = await Promise.all([
+        const [s, p, docs, c, inv, pay, att, g, a, sub, t] = await Promise.all([
           fetchStudentById(studentId),
           fetchStudentParents(studentId),
           fetchStudentDocuments(studentId),
@@ -63,6 +68,7 @@ export function StudentDetailContent({ studentId }: { studentId: string }) {
           fetchGrades(),
           fetchAssessments(),
           fetchSubjects(),
+          fetchTerms(),
         ]);
         if (cancelled) return;
         setStudent(s);
@@ -75,6 +81,7 @@ export function StudentDetailContent({ studentId }: { studentId: string }) {
         setGrades(g);
         setAssessments(a);
         setSubjects(sub);
+        setTerms(t);
       } catch (e) {
         console.error('Failed to load student detail:', e);
       } finally {
@@ -83,6 +90,18 @@ export function StudentDetailContent({ studentId }: { studentId: string }) {
     })();
     return () => { cancelled = true; };
   }, [studentId]);
+
+  const handleDownloadBulletin = async () => {
+    if (!student) return;
+    setDownloadingBulletin(true);
+    try {
+      await downloadStudentBulletin(student.id, student.matricule, bulletinTermId || undefined);
+    } catch (e) {
+      console.error('Failed to download bulletin:', e);
+    } finally {
+      setDownloadingBulletin(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -351,8 +370,20 @@ export function StudentDetailContent({ studentId }: { studentId: string }) {
               <Button variant="outline" size="sm" className="w-full gap-1.5 justify-start rounded-xl">
                 <FileText className="h-4 w-4" /> <span className="truncate">Carte scolaire</span>
               </Button>
-              <Button variant="outline" size="sm" className="w-full gap-1.5 justify-start rounded-xl">
-                <Download className="h-4 w-4" /> <span className="truncate">Bulletin PDF</span>
+              <select
+                value={bulletinTermId}
+                onChange={e => setBulletinTermId(e.target.value)}
+                className="w-full rounded-xl border border-input bg-background px-3 py-2 text-xs focus:border-primary focus:outline-none"
+              >
+                <option value="">Toutes les périodes</option>
+                {terms.map(t => <option key={t.id} value={t.id}>{t.libelle}</option>)}
+              </select>
+              <Button
+                variant="outline" size="sm" onClick={handleDownloadBulletin} disabled={downloadingBulletin}
+                className="w-full gap-1.5 justify-start rounded-xl"
+              >
+                {downloadingBulletin ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                <span className="truncate">Bulletin PDF</span>
               </Button>
             </div>
           </Card>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { School, Users, Calendar, Save, Upload, Shield, UserCog, Calculator, BookOpen, Mail, Lock, Bell, Loader2, CheckCircle2, Layers, Plus, Pencil, Trash2, GraduationCap, Power } from 'lucide-react';
+import { School, Users, Calendar, Save, Upload, Shield, UserCog, Calculator, BookOpen, Mail, Lock, Bell, Loader2, CheckCircle2, Layers, Plus, Pencil, Trash2, GraduationCap, Power, ScrollText, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   fetchMySchool,
   updateMySchool,
@@ -21,6 +21,8 @@ import {
   createLevel,
   updateLevel,
   deleteLevel,
+  fetchAuditLogs,
+  type DbAuditLogEntry,
 } from '@/lib/api';
 import { ApiError } from '@/lib/api-client';
 import { roleLabels } from '@/lib/navigation';
@@ -56,13 +58,14 @@ const editableRoles: { value: 'school_admin' | 'secretary' | 'accountant'; label
   { value: 'accountant', label: 'Comptable' },
 ];
 
-type Tab = 'school' | 'hierarchy' | 'users' | 'years' | 'security';
+type Tab = 'school' | 'hierarchy' | 'users' | 'years' | 'audit' | 'security';
 
 const tabs = [
   { id: 'school' as Tab, label: 'Établissement', icon: School },
   { id: 'hierarchy' as Tab, label: 'Cycles & Niveaux', icon: Layers },
   { id: 'users' as Tab, label: 'Utilisateurs', icon: Users },
   { id: 'years' as Tab, label: 'Années scolaires', icon: Calendar },
+  { id: 'audit' as Tab, label: 'Journal', icon: ScrollText },
   { id: 'security' as Tab, label: 'Sécurité', icon: Shield },
 ];
 
@@ -74,6 +77,29 @@ const roleIcons: Record<Role, typeof Shield> = {
   teacher: BookOpen,
   parent: Users,
 };
+
+const auditActionLabels: Record<string, string> = {
+  CREATE_USER: 'Utilisateur créé',
+  UPDATE_USER_ROLE: 'Rôle modifié',
+  ACTIVATE_USER: 'Compte activé',
+  DEACTIVATE_USER: 'Compte désactivé',
+  RESET_PASSWORD: 'Mot de passe réinitialisé',
+  UPDATE_SCHOOL: 'École mise à jour',
+  IMPORT_STUDENTS: 'Import élèves',
+  CREATE_ACADEMIC_YEAR: 'Année scolaire créée',
+  ACTIVATE_ACADEMIC_YEAR: 'Année scolaire activée',
+  ARCHIVE_ACADEMIC_YEAR: 'Année scolaire archivée',
+};
+
+function formatAuditValue(json: string | null): string {
+  if (!json) return '';
+  try {
+    const obj = JSON.parse(json) as Record<string, unknown>;
+    return Object.entries(obj).map(([k, v]) => `${k}: ${v}`).join(' · ');
+  } catch {
+    return json;
+  }
+}
 
 export function SettingsContent() {
   const [tab, setTab] = useState<Tab>('school');
@@ -114,6 +140,34 @@ export function SettingsContent() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState('');
   const [togglingUserId, setTogglingUserId] = useState<string | null>(null);
+
+  const AUDIT_PAGE_SIZE = 25;
+  const [auditEntries, setAuditEntries] = useState<DbAuditLogEntry[]>([]);
+  const [auditTotal, setAuditTotal] = useState(0);
+  const [auditOffset, setAuditOffset] = useState(0);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditError, setAuditError] = useState('');
+  const [auditLoadedOnce, setAuditLoadedOnce] = useState(false);
+
+  useEffect(() => {
+    if (tab !== 'audit') return;
+    let cancelled = false;
+    setAuditLoading(true);
+    setAuditError('');
+    fetchAuditLogs({ limit: AUDIT_PAGE_SIZE, offset: auditOffset })
+      .then(res => {
+        if (cancelled) return;
+        setAuditEntries(res.items);
+        setAuditTotal(res.total);
+        setAuditLoadedOnce(true);
+      })
+      .catch(err => {
+        if (cancelled) return;
+        setAuditError(err instanceof ApiError ? err.message : 'Échec du chargement du journal.');
+      })
+      .finally(() => { if (!cancelled) setAuditLoading(false); });
+    return () => { cancelled = true; };
+  }, [tab, auditOffset]);
 
   useEffect(() => {
     let cancelled = false;
@@ -843,6 +897,86 @@ export function SettingsContent() {
             </div>
           </Card>
         </>
+      )}
+
+      {tab === 'audit' && (
+        <Card className="overflow-hidden rounded-2xl shadow-card">
+          <div className="p-4 border-b border-border flex items-center justify-between gap-2">
+            <div>
+              <h3 className="font-semibold text-foreground">Journal d'audit</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">Actions sensibles enregistrées pour cette école.</p>
+            </div>
+            {auditTotal > 0 && (
+              <span className="text-xs text-muted-foreground shrink-0">{auditTotal} entrée(s)</span>
+            )}
+          </div>
+
+          {auditError && (
+            <div className="m-4 rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive">{auditError}</div>
+          )}
+
+          {auditLoading && !auditLoadedOnce ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : auditEntries.length === 0 ? (
+            <p className="p-6 text-sm text-muted-foreground">Aucune action enregistrée pour le moment.</p>
+          ) : (
+            <>
+              <div className="overflow-x-auto scrollbar-thin">
+                <table className="w-full min-w-[720px]">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30">
+                      <th className="text-left text-xs font-semibold text-muted-foreground uppercase px-4 py-3">Quand</th>
+                      <th className="text-left text-xs font-semibold text-muted-foreground uppercase px-4 py-3">Qui</th>
+                      <th className="text-left text-xs font-semibold text-muted-foreground uppercase px-4 py-3">Action</th>
+                      <th className="text-left text-xs font-semibold text-muted-foreground uppercase px-4 py-3">Détail</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {auditEntries.map(e => (
+                      <tr key={e.id} className="hover:bg-muted/30 transition-colors">
+                        <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
+                          {new Date(e.created_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-foreground truncate max-w-[160px]">
+                          {e.actor_nom || <span className="text-muted-foreground italic">Système</span>}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="badge-modern inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                            {auditActionLabels[e.action] || e.action.replaceAll('_', ' ').toLowerCase()}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground max-w-[320px] truncate">
+                          {formatAuditValue(e.new_value) || formatAuditValue(e.old_value) || '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex items-center justify-between gap-3 p-4 border-t border-border">
+                <Button
+                  variant="outline" size="sm" disabled={auditOffset === 0 || auditLoading}
+                  onClick={() => setAuditOffset(o => Math.max(0, o - AUDIT_PAGE_SIZE))}
+                  className="gap-1.5 rounded-xl"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" /> Précédent
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  {auditOffset + 1}–{Math.min(auditOffset + AUDIT_PAGE_SIZE, auditTotal)} sur {auditTotal}
+                </span>
+                <Button
+                  variant="outline" size="sm" disabled={auditOffset + AUDIT_PAGE_SIZE >= auditTotal || auditLoading}
+                  onClick={() => setAuditOffset(o => o + AUDIT_PAGE_SIZE)}
+                  className="gap-1.5 rounded-xl"
+                >
+                  Suivant <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </>
+          )}
+        </Card>
       )}
 
       {tab === 'security' && (

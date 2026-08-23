@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPatch, apiPut, apiDelete } from './api-client';
+import { apiGet, apiPost, apiPatch, apiPut, apiDelete, apiUpload, downloadFile } from './api-client';
 
 // Database row types (snake_case, matching the FastAPI response shapes)
 export interface DbSchool {
@@ -208,6 +208,22 @@ export const fetchAllStudentParents = () => apiGet<DbStudentParent[]>('/students
 
 // Student documents module is deferred (out of scope for this pass) — no backend route yet.
 export const fetchStudentDocuments = async (_studentId: string) => [] as { id: string; nom: string; type: string; date_ajout: string }[];
+
+export const downloadStudentBulletin = (studentId: string, matricule: string, termId?: string) =>
+  downloadFile(`/students/${studentId}/bulletin.pdf${termId ? `?term_id=${termId}` : ''}`, `bulletin-${matricule}.pdf`);
+
+export const exportStudentsCsv = () => downloadFile('/students/export.csv', 'eleves.csv');
+
+export interface StudentImportResult {
+  created: number;
+  errors: { row: number; message: string }[];
+}
+
+export const importStudentsCsv = (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return apiUpload<StudentImportResult>('/students/import', formData);
+};
 
 // ── Parents ───────────────────────────────────────────────────
 
@@ -507,6 +523,32 @@ export const fetchChildInvoices = (studentId: string) =>
   apiGet<DbInvoice[]>(`/parent/children/${studentId}/invoices`);
 export const fetchChildPayments = (studentId: string) =>
   apiGet<DbPayment[]>(`/parent/children/${studentId}/payments`);
+export const downloadChildBulletin = (studentId: string, matricule: string, termId?: string) =>
+  downloadFile(`/parent/children/${studentId}/bulletin.pdf${termId ? `?term_id=${termId}` : ''}`, `bulletin-${matricule}.pdf`);
+
+// ── Audit log (school_admin: own school · super_admin: platform-level entries) ──
+
+export interface DbAuditLogEntry {
+  id: string;
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  old_value: string | null;
+  new_value: string | null;
+  created_at: string;
+  actor_nom: string | null;
+  actor_email: string | null;
+}
+
+export const fetchAuditLogs = (params: { limit?: number; offset?: number; action?: string; entity_type?: string } = {}) => {
+  const qs = new URLSearchParams();
+  if (params.limit) qs.set('limit', String(params.limit));
+  if (params.offset) qs.set('offset', String(params.offset));
+  if (params.action) qs.set('action', params.action);
+  if (params.entity_type) qs.set('entity_type', params.entity_type);
+  const query = qs.toString();
+  return apiGet<{ total: number; items: DbAuditLogEntry[] }>(`/audit-logs${query ? `?${query}` : ''}`);
+};
 
 // Communication module is deferred (out of scope for this pass) — no backend routes yet.
 export const fetchNotifications = async () => [] as {

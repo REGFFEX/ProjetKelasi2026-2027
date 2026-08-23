@@ -8,7 +8,17 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { fetchStudents, fetchClassrooms, fetchParents, fetchAllStudentParents, deleteStudent } from '@/lib/api';
+import {
+  fetchStudents,
+  fetchClassrooms,
+  fetchParents,
+  fetchAllStudentParents,
+  deleteStudent,
+  exportStudentsCsv,
+  importStudentsCsv,
+  type StudentImportResult,
+} from '@/lib/api';
+import { ApiError } from '@/lib/api-client';
 
 interface StudentRow {
   id: string;
@@ -46,6 +56,11 @@ export function StudentsListContent() {
   const [classrooms, setClassrooms] = useState<ClassroomRow[]>([]);
   const [parents, setParents] = useState<ParentRow[]>([]);
   const [studentParents, setStudentParents] = useState<StudentParentRow[]>([]);
+  const [exporting, setExporting] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<StudentImportResult | null>(null);
+  const [importError, setImportError] = useState('');
 
   useEffect(() => {
     async function load() {
@@ -86,6 +101,41 @@ export function StudentsListContent() {
     }
   };
 
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await exportStudentsCsv();
+    } catch (err) {
+      console.error('Failed to export students:', err);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const openImport = () => {
+    setImportFile(null);
+    setImportResult(null);
+    setImportError('');
+    setShowImport(true);
+  };
+
+  const handleImport = async () => {
+    if (!importFile) return;
+    setImporting(true);
+    setImportError('');
+    try {
+      const result = await importStudentsCsv(importFile);
+      setImportResult(result);
+      const [s, sp] = await Promise.all([fetchStudents(), fetchAllStudentParents()]);
+      setStudents(s as StudentRow[]);
+      setStudentParents(sp as unknown as StudentParentRow[]);
+    } catch (err) {
+      setImportError(err instanceof ApiError ? err.message : "Échec de l'import.");
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const filtered = useMemo(() => {
     return students.filter(s => {
       const fullName = `${s.prenom} ${s.nom}`.toLowerCase();
@@ -112,11 +162,11 @@ export function StudentsListContent() {
           <p className="text-sm text-muted-foreground mt-0.5">{filtered.length} élève(s) — {students.length} au total</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Button variant="outline" size="sm" className="gap-1.5 rounded-xl">
+          <Button variant="outline" size="sm" onClick={openImport} className="gap-1.5 rounded-xl">
             <Upload className="h-4 w-4" /> <span className="hidden sm:inline">Importer</span>
           </Button>
-          <Button variant="outline" size="sm" className="gap-1.5 rounded-xl">
-            <Download className="h-4 w-4" /> <span className="hidden sm:inline">Exporter</span>
+          <Button variant="outline" size="sm" onClick={handleExport} disabled={exporting} className="gap-1.5 rounded-xl">
+            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} <span className="hidden sm:inline">Exporter</span>
           </Button>
           <Link href="/students/new">
             <Button size="sm" className="gap-1.5 rounded-xl">
@@ -302,40 +352,56 @@ export function StudentsListContent() {
               </button>
             </div>
             <div className="p-5 space-y-4">
-              <div className="rounded-2xl border-2 border-dashed border-border p-8 text-center hover:border-primary/50 transition-colors cursor-pointer">
+              <label className="block rounded-2xl border-2 border-dashed border-border p-8 text-center hover:border-primary/50 transition-colors cursor-pointer">
+                <input
+                  type="file" accept=".csv,text/csv" className="sr-only"
+                  onChange={e => { setImportFile(e.target.files?.[0] || null); setImportResult(null); setImportError(''); }}
+                />
                 <Upload className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                <p className="text-sm text-foreground font-medium">Cliquez pour téléverser ou glissez un fichier</p>
-                <p className="text-xs text-muted-foreground mt-1">CSV, XLSX max 5MB</p>
-              </div>
+                <p className="text-sm text-foreground font-medium">
+                  {importFile ? importFile.name : 'Cliquez pour choisir un fichier'}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">CSV uniquement</p>
+              </label>
               <div className="rounded-xl bg-muted/50 p-4 space-y-2">
-                <p className="text-xs font-medium text-foreground">Colonnes attendues:</p>
+                <p className="text-xs font-medium text-foreground">Colonnes attendues (en-têtes exacts) :</p>
                 <div className="grid grid-cols-2 gap-1.5 text-xs text-muted-foreground">
-                  <span>· prenom (obligatoire)</span>
+                  <span>· matricule (obligatoire)</span>
                   <span>· nom (obligatoire)</span>
-                  <span>· dateNaissance</span>
-                  <span>· matricule</span>
-                  <span>· classe</span>
-                  <span>· parentNom</span>
-                  <span>· parentTelephone</span>
-                  <span>· parentProfession</span>
+                  <span>· prenom (obligatoire)</span>
+                  <span>· date_naissance (AAAA-MM-JJ)</span>
+                  <span>· classe (nom exact)</span>
+                  <span>· statut (actif/inactif)</span>
                 </div>
               </div>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <CheckCircle className="h-3.5 w-3.5 text-success" />
-                <span>Les doublons (matricule) seront ignorés</span>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <AlertCircle className="h-3.5 w-3.5 text-warning" />
-                <span>Vérifiez les noms de classe avant l'import</span>
+                <span>Une classe introuvable n'empêche pas la création de l'élève, juste son affectation.</span>
               </div>
+              {importError && <p className="text-sm text-destructive">{importError}</p>}
+              {importResult && (
+                <div className="rounded-xl bg-success/10 p-3 space-y-1.5">
+                  <p className="text-sm font-medium text-success flex items-center gap-1.5">
+                    <CheckCircle className="h-4 w-4" /> {importResult.created} élève(s) importé(s)
+                  </p>
+                  {importResult.errors.length > 0 && (
+                    <ul className="text-xs text-muted-foreground space-y-0.5 max-h-24 overflow-y-auto scrollbar-thin">
+                      {importResult.errors.map((e, i) => (
+                        <li key={i}>Ligne {e.row} — {e.message}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
             </div>
-            <div className="flex items-center justify-between border-t border-border p-5">
-              <Button variant="outline" size="sm" className="gap-1.5 rounded-xl">
-                <Download className="h-4 w-4" /> <span className="hidden sm:inline">Modèle</span>
-              </Button>
+            <div className="flex items-center justify-end border-t border-border p-5">
               <div className="flex gap-3">
-                <Button variant="outline" onClick={() => setShowImport(false)} className="rounded-xl">Annuler</Button>
-                <Button onClick={() => setShowImport(false)} className="rounded-xl">Importer</Button>
+                <Button variant="outline" onClick={() => setShowImport(false)} className="rounded-xl">
+                  {importResult ? 'Fermer' : 'Annuler'}
+                </Button>
+                <Button onClick={handleImport} disabled={!importFile || importing} className="gap-1.5 rounded-xl">
+                  {importing && <Loader2 className="h-4 w-4 animate-spin" />} Importer
+                </Button>
               </div>
             </div>
           </div>

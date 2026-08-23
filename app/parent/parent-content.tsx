@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowRight,
+  Download,
   FileText,
   GraduationCap,
   Loader2,
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
   fetchMyChildren,
@@ -20,6 +22,8 @@ import {
   fetchChildGrades,
   fetchChildAssessments,
   fetchSubjects,
+  fetchTerms,
+  downloadChildBulletin,
   formatMoney,
   type DbStudent,
   type DbClassroom,
@@ -329,31 +333,40 @@ export function ParentBulletinsContent() {
         </div>
       )}
 
-      {selectedId && <ChildBulletin studentId={selectedId} />}
+      {selectedId && (() => {
+        const child = children.find(c => c.id === selectedId);
+        return child ? <ChildBulletin student={child} /> : null;
+      })()}
     </div>
   );
 }
 
-function ChildBulletin({ studentId }: { studentId: string }) {
+function ChildBulletin({ student }: { student: DbStudent }) {
+  const studentId = student.id;
   const [loading, setLoading] = useState(true);
   const [grades, setGrades] = useState<Awaited<ReturnType<typeof fetchChildGrades>>>([]);
   const [assessments, setAssessments] = useState<Awaited<ReturnType<typeof fetchChildAssessments>>>([]);
   const [subjects, setSubjects] = useState<Awaited<ReturnType<typeof fetchSubjects>>>([]);
+  const [terms, setTerms] = useState<Awaited<ReturnType<typeof fetchTerms>>>([]);
+  const [termId, setTermId] = useState('');
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     (async () => {
       try {
-        const [g, a, s] = await Promise.all([
+        const [g, a, s, t] = await Promise.all([
           fetchChildGrades(studentId),
           fetchChildAssessments(studentId),
           fetchSubjects(),
+          fetchTerms(),
         ]);
         if (cancelled) return;
         setGrades(g);
         setAssessments(a);
         setSubjects(s);
+        setTerms(t);
       } catch (e) {
         console.error(e);
       } finally {
@@ -362,6 +375,17 @@ function ChildBulletin({ studentId }: { studentId: string }) {
     })();
     return () => { cancelled = true; };
   }, [studentId]);
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      await downloadChildBulletin(studentId, student.matricule, termId || undefined);
+    } catch (e) {
+      console.error('Failed to download bulletin:', e);
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -398,6 +422,20 @@ function ChildBulletin({ studentId }: { studentId: string }) {
 
   return (
     <Card className="p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-4 border-b border-border">
+        <select
+          value={termId}
+          onChange={e => setTermId(e.target.value)}
+          className="rounded-xl border border-input bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+        >
+          <option value="">Toutes les périodes</option>
+          {terms.map(t => <option key={t.id} value={t.id}>{t.libelle}</option>)}
+        </select>
+        <Button variant="outline" size="sm" onClick={handleDownload} disabled={downloading} className="gap-1.5 rounded-xl">
+          {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          Télécharger en PDF
+        </Button>
+      </div>
       {subjectEntries.length === 0 ? (
         <p className="text-sm text-muted-foreground">Aucune note disponible pour le moment.</p>
       ) : (

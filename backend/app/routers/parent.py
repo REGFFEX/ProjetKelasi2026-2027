@@ -1,13 +1,17 @@
 from fastapi import APIRouter, Depends
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.authz import get_parent_row
 from app.db import get_db
 from app.deps import CurrentUser, require_role
+from app.models.academic import Term
 from app.models.finance import Invoice, Payment
 from app.models.operations import Assessment, Attendance, Grade
 from app.models.people import Student, StudentParent
+from app.models.school import School
 from app.models.user import Role
+from app.pdf.bulletin import build_bulletin_pdf
 from app.response import envelope, APIException
 from app.routers.students import _serialize as serialize_student
 from app.schemas.attendance import AttendanceOut
@@ -102,3 +106,25 @@ def child_payments(
     invoice_ids = [i.id for i in db.query(Invoice.id).filter(Invoice.student_id == student_id).all()]
     rows = db.query(Payment).filter(Payment.invoice_id.in_(invoice_ids)).all() if invoice_ids else []
     return envelope([PaymentOut.model_validate(r).model_dump() for r in rows])
+
+
+@router.get("/children/{student_id}/bulletin.pdf")
+def child_bulletin(
+    student_id: str,
+    term_id: str | None = None,
+    current_user: CurrentUser = Depends(require_role(Role.parent)),
+    db: Session = Depends(get_db),
+):
+    student = _assert_own_child(db, current_user, student_id)
+    school = db.get(School, current_user.school_id)
+    term = None
+    if term_id:
+        term = db.get(Term, term_id)
+        if not term or term.school_id != current_user.school_id:
+            raise APIException(404, "Période introuvable.")
+    pdf_bytes = build_bulletin_pdf(db, student, school, term)
+    filename = f"bulletin-{student.matricule}.pdf"
+    return Response(
+        content=pdf_bytes, media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

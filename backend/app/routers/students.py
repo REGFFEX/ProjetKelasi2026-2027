@@ -1,11 +1,19 @@
-from fastapi import APIRouter, Depends
+import csv
+import io
+from datetime import date, datetime
+
+from fastapi import APIRouter, Depends, UploadFile
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.authz import get_active_academic_year_or_none
+from app.authz import get_active_academic_year_or_none, write_audit_log
 from app.db import get_db
 from app.deps import CurrentUser, require_role
-from app.models.people import Student, Parent, StudentParent, Enrollment
-from app.models.user import Role
+from app.models.academic import Term
+from app.models.people import Classroom, Student, Parent, StudentParent, Enrollment
+from app.models.school import School
+from app.models.user import Role, UserStatus
+from app.pdf.bulletin import build_bulletin_pdf
 from app.response import envelope, APIException
 from app.schemas.students import StudentCreate, StudentUpdate, StudentOut, StudentParentsSet
 from app.schemas.parents import ParentOut
@@ -90,6 +98,95 @@ def list_all_student_parents(
     )
 
 
+CSV_COLUMNS = ["matricule", "nom", "prenom", "date_naissance", "classe", "statut"]
+
+
+@router.get("/export.csv")
+def export_students_csv(
+    current_user: CurrentUser = Depends(require_role(Role.school_admin, Role.secretary)),
+    db: Session = Depends(get_db),
+):
+    students = (
+        db.query(Student).filter(Student.school_id == current_user.school_id).order_by(Student.nom).all()
+    )
+    classroom_ids = {_current_classroom_id(db, current_user.school_id, s.id) for s in students}
+    classroom_ids.discard(None)
+    classrooms = {c.id: c.nom for c in db.query(Classroom).filter(Classroom.id.in_(classroom_ids)).all()} if classroom_ids else {}
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(CSV_COLUMNS)
+    for s in students:
+        classroom_id = _current_classroom_id(db, current_user.school_id, s.id)
+        writer.writerow([
+            s.matricule, s.nom, s.prenom, s.date_naissance.isoformat(),
+            classrooms.get(classroom_id, ""), s.statut.value,
+        ])
+    return Response(
+        content=buf.getvalue(), media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="eleves.csv"'},
+    )
+
+
+@router.post("/import")
+async def import_students_csv(
+    file: UploadFile,
+    current_user: CurrentUser = Depends(require_role(Role.school_admin, Role.secretary)),
+    db: Session = Depends(get_db),
+):
+    raw = (await file.read()).decode("utf-8-sig")
+    reader = csv.DictReader(io.StringIO(raw))
+    if reader.fieldnames is None:
+        raise APIException(400, "Fichier CSV vide ou illisible.")
+    headers = {(h or "").strip().lower() for h in reader.fieldnames}
+    if not {"matricule", "nom", "prenom", "date_naissance"}.issubset(headers):
+        raise APIException(400, "Colonnes attendues : matricule, nom, prenom, date_naissance, classe, statut.")
+
+    classrooms_by_name = {
+        c.nom.strip().lower(): c.id
+        for c in db.query(Classroom).filter(Classroom.school_id == current_user.school_id).all()
+    }
+
+    created, errors = 0, []
+    for i, row in enumerate(reader, start=2):
+        row = {(k or "").strip().lower(): (v or "").strip() for k, v in row.items()}
+        try:
+            # A savepoint per row: a failure here rolls back only this row, not
+            # the students already committed earlier in the same import.
+            with db.begin_nested():
+                if not row.get("matricule") or not row.get("nom") or not row.get("prenom"):
+                    raise ValueError("matricule, nom et prénom sont requis.")
+                try:
+                    naissance = datetime.strptime(row["date_naissance"], "%Y-%m-%d").date()
+                except ValueError:
+                    raise ValueError("date_naissance doit être au format AAAA-MM-JJ.")
+                statut = UserStatus.inactif if row.get("statut", "").lower().startswith("inactif") else UserStatus.actif
+
+                student = Student(
+                    school_id=current_user.school_id, matricule=row["matricule"], nom=row["nom"],
+                    prenom=row["prenom"], date_naissance=naissance, statut=statut,
+                )
+                db.add(student)
+                db.flush()
+
+                classe = row.get("classe", "")
+                classroom_id = classrooms_by_name.get(classe.lower()) if classe else None
+                if classe and not classroom_id:
+                    errors.append({"row": i, "message": f"Classe « {classe} » introuvable — élève créé sans classe."})
+                elif classroom_id:
+                    _set_enrollment(db, current_user, student.id, classroom_id)
+
+            created += 1
+        except ValueError as e:
+            errors.append({"row": i, "message": str(e)})
+        except Exception:
+            errors.append({"row": i, "message": "Ligne invalide."})
+
+    write_audit_log(db, current_user, "IMPORT_STUDENTS", "student", "bulk", new_value={"created": created, "errors": len(errors)})
+    db.commit()
+    return envelope({"created": created, "errors": errors}, f"{created} élève(s) importé(s).")
+
+
 @router.get("/{student_id}")
 def get_student(
     student_id: str,
@@ -172,6 +269,28 @@ def set_student_parents(
         db.add(StudentParent(school_id=current_user.school_id, student_id=student_id, parent_id=parent_id))
     db.commit()
     return envelope(None, "Parents liés à l'élève.")
+
+
+@router.get("/{student_id}/bulletin.pdf")
+def get_student_bulletin(
+    student_id: str,
+    term_id: str | None = None,
+    current_user: CurrentUser = Depends(require_role(Role.school_admin, Role.secretary)),
+    db: Session = Depends(get_db),
+):
+    student = _get_scoped(db, current_user, student_id)
+    school = db.get(School, current_user.school_id)
+    term = None
+    if term_id:
+        term = db.get(Term, term_id)
+        if not term or term.school_id != current_user.school_id:
+            raise APIException(404, "Période introuvable.")
+    pdf_bytes = build_bulletin_pdf(db, student, school, term)
+    filename = f"bulletin-{student.matricule}.pdf"
+    return Response(
+        content=pdf_bytes, media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 def _get_scoped(db: Session, current_user: CurrentUser, student_id: str) -> Student:
