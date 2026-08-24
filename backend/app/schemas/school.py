@@ -3,6 +3,7 @@ from datetime import date
 from pydantic import BaseModel
 
 from app.models.school import SubscriptionStatus
+from app.models.user import UserStatus
 
 
 class SchoolAdminCreate(BaseModel):
@@ -17,6 +18,13 @@ class SchoolAdminUpdate(BaseModel):
     adresse: str | None = None
     telephone: str | None = None
     statut_abonnement: SubscriptionStatus | None = None
+
+
+class SchoolAdminUserUpdate(BaseModel):
+    """What a super_admin may edit about a school's own admin account — not other roles."""
+    nom: str | None = None
+    telephone: str | None = None
+    statut: UserStatus | None = None
 
 
 class SchoolSelfUpdate(BaseModel):

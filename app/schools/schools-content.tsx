@@ -1,8 +1,17 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Building2, Plus, Users, GraduationCap, Loader2, Pencil, UserPlus } from 'lucide-react';
-import { fetchAllSchoolsAdmin, createSchoolAdmin, updateSchoolAdmin, createSchoolAdminUser } from '@/lib/api';
+import { Building2, Plus, Users, GraduationCap, Loader2, Pencil, UserPlus, Eye, Power, Shield } from 'lucide-react';
+import {
+  fetchAllSchoolsAdmin,
+  createSchoolAdmin,
+  updateSchoolAdmin,
+  createSchoolAdminUser,
+  fetchSchoolUsers,
+  updateSchoolAdminUser,
+  resetSchoolAdminUserPassword,
+  type DbUser,
+} from '@/lib/api';
 import { ApiError } from '@/lib/api-client';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,6 +26,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { roleLabels } from '@/lib/navigation';
+import type { Role } from '@/lib/types';
 
 const emptyForm = { nom: '', adresse: '', telephone: '', statut_abonnement: 'essai' as 'actif' | 'essai' | 'expire' };
 const emptyAdminForm = { nom: '', email: '', password: '', telephone: '' };
@@ -40,6 +51,18 @@ export function SchoolsContent() {
   const [savingAdmin, setSavingAdmin] = useState(false);
   const [adminError, setAdminError] = useState('');
   const [adminSuccess, setAdminSuccess] = useState('');
+
+  const [viewSchoolId, setViewSchoolId] = useState<string | null>(null);
+  const [viewUsers, setViewUsers] = useState<DbUser[]>([]);
+  const [viewLoading, setViewLoading] = useState(false);
+  const [viewError, setViewError] = useState('');
+  const [togglingAdminId, setTogglingAdminId] = useState<string | null>(null);
+  const [editingAdminUser, setEditingAdminUser] = useState<DbUser | null>(null);
+  const [editAdminNom, setEditAdminNom] = useState('');
+  const [editAdminTelephone, setEditAdminTelephone] = useState('');
+  const [editAdminPassword, setEditAdminPassword] = useState('');
+  const [savingAdminEdit, setSavingAdminEdit] = useState(false);
+  const [editAdminError, setEditAdminError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -104,6 +127,56 @@ export function SchoolsContent() {
       setAdminError(err instanceof ApiError ? err.message : 'Échec de la création de l\'administrateur.');
     } finally {
       setSavingAdmin(false);
+    }
+  };
+
+  const openViewUsers = (schoolId: string) => {
+    setViewSchoolId(schoolId);
+    setViewUsers([]);
+    setViewError('');
+    setViewLoading(true);
+    fetchSchoolUsers(schoolId)
+      .then(setViewUsers)
+      .catch(err => setViewError(err instanceof ApiError ? err.message : 'Échec du chargement des comptes.'))
+      .finally(() => setViewLoading(false));
+  };
+
+  const openEditAdminUser = (u: DbUser) => {
+    setEditingAdminUser(u);
+    setEditAdminNom(u.nom);
+    setEditAdminTelephone(u.telephone);
+    setEditAdminPassword('');
+    setEditAdminError('');
+  };
+
+  const handleSaveAdminEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!viewSchoolId || !editingAdminUser) return;
+    setSavingAdminEdit(true);
+    setEditAdminError('');
+    try {
+      const updated = await updateSchoolAdminUser(viewSchoolId, editingAdminUser.id, { nom: editAdminNom, telephone: editAdminTelephone });
+      if (editAdminPassword.trim()) await resetSchoolAdminUserPassword(viewSchoolId, editingAdminUser.id, editAdminPassword.trim());
+      setViewUsers(prev => prev.map(u => (u.id === updated.id ? updated : u)));
+      setEditingAdminUser(null);
+    } catch (err) {
+      setEditAdminError(err instanceof ApiError ? err.message : 'Échec de la mise à jour.');
+    } finally {
+      setSavingAdminEdit(false);
+    }
+  };
+
+  const handleToggleAdminStatut = async (u: DbUser) => {
+    if (!viewSchoolId) return;
+    setTogglingAdminId(u.id);
+    setViewError('');
+    try {
+      const updated = await updateSchoolAdminUser(viewSchoolId, u.id, { statut: u.statut === 'actif' ? 'inactif' : 'actif' });
+      setViewUsers(prev => prev.map(x => (x.id === updated.id ? updated : x)));
+    } catch (err) {
+      setViewError(err instanceof ApiError ? err.message : 'Échec de la mise à jour du statut.');
+    } finally {
+      setTogglingAdminId(null);
     }
   };
 
@@ -215,6 +288,89 @@ export function SchoolsContent() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!viewSchoolId} onOpenChange={open => !open && setViewSchoolId(null)}>
+        <DialogContent className="rounded-2xl max-h-[85vh] overflow-y-auto sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Comptes de {schools.find(s => s.id === viewSchoolId)?.nom}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground -mt-2">
+            Vue de tous les rôles. Seul le directeur (admin) peut être modifié depuis ici.
+          </p>
+          {viewError && <div className="rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive">{viewError}</div>}
+          {viewLoading ? (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : viewUsers.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4">Aucun compte pour cette école.</p>
+          ) : (
+            <div className="divide-y divide-border">
+              {viewUsers.map(u => (
+                <div key={u.id} className="flex items-center justify-between gap-3 py-2.5">
+                  <div className="min-w-0 flex items-center gap-2.5">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary shrink-0">
+                      {u.role === 'school_admin' ? <Shield className="h-3.5 w-3.5" /> : <span className="text-xs font-semibold">{u.nom[0]}</span>}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{u.nom}</p>
+                      <p className="text-xs text-muted-foreground truncate">{u.email} · {roleLabels[u.role as Role] || u.role}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={cn('badge-modern rounded-full px-2 py-0.5 text-xs font-medium',
+                      u.statut === 'actif' ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
+                    )}>
+                      {u.statut === 'actif' ? 'Actif' : 'Inactif'}
+                    </span>
+                    {u.role === 'school_admin' && (
+                      <>
+                        <Button variant="ghost" size="sm" onClick={() => openEditAdminUser(u)} className="h-7 w-7 p-0 rounded-lg">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost" size="sm" onClick={() => handleToggleAdminStatut(u)} disabled={togglingAdminId === u.id}
+                          className="h-7 w-7 p-0 rounded-lg"
+                        >
+                          {togglingAdminId === u.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Power className="h-3.5 w-3.5" />}
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editingAdminUser} onOpenChange={open => !open && setEditingAdminUser(null)}>
+        <DialogContent className="rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Modifier {editingAdminUser?.nom}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSaveAdminEdit} className="space-y-3">
+            <div>
+              <Label htmlFor="ea-nom">Nom complet</Label>
+              <Input id="ea-nom" value={editAdminNom} onChange={e => setEditAdminNom(e.target.value)} required className="mt-1.5 rounded-xl" />
+            </div>
+            <div>
+              <Label htmlFor="ea-telephone">Téléphone</Label>
+              <Input id="ea-telephone" value={editAdminTelephone} onChange={e => setEditAdminTelephone(e.target.value)} className="mt-1.5 rounded-xl" />
+            </div>
+            <div>
+              <Label htmlFor="ea-password">Nouveau mot de passe (optionnel)</Label>
+              <Input id="ea-password" type="password" minLength={6} value={editAdminPassword} onChange={e => setEditAdminPassword(e.target.value)} placeholder="Laisser vide pour ne pas changer" className="mt-1.5 rounded-xl" />
+            </div>
+            {editAdminError && <div className="rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive">{editAdminError}</div>}
+            <DialogFooter>
+              <Button type="submit" disabled={savingAdminEdit} className="rounded-xl">
+                {savingAdminEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Enregistrer'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {error && (
         <div className="rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive animate-fade-in">
           {error}
@@ -254,12 +410,20 @@ export function SchoolsContent() {
                   <option value="expire">Expiré</option>
                 </select>
               </div>
-              <button
-                onClick={() => openAddAdmin(s.id)}
-                className="mt-3 flex items-center gap-1.5 text-xs font-medium text-primary hover:underline w-full"
-              >
-                <UserPlus className="h-3.5 w-3.5" /> Ajouter un administrateur
-              </button>
+              <div className="mt-3 flex flex-col gap-1.5">
+                <button
+                  onClick={() => openViewUsers(s.id)}
+                  className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline w-full"
+                >
+                  <Eye className="h-3.5 w-3.5" /> Voir les comptes
+                </button>
+                <button
+                  onClick={() => openAddAdmin(s.id)}
+                  className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline w-full"
+                >
+                  <UserPlus className="h-3.5 w-3.5" /> Ajouter un administrateur
+                </button>
+              </div>
             </Card>
           );
         })}

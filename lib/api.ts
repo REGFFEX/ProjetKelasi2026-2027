@@ -489,6 +489,15 @@ export const updateSchoolAdmin = (id: string, updates: Partial<SchoolAdminInput>
 export const createSchoolAdminUser = (schoolId: string, user: { nom: string; email: string; password: string; telephone?: string }) =>
   apiPost<DbUser>(`/admin/schools/${schoolId}/admin`, { ...user, role: 'school_admin' });
 
+/** Read-only view of every account in a school (all roles). */
+export const fetchSchoolUsers = (schoolId: string) => apiGet<DbUser[]>(`/admin/schools/${schoolId}/users`);
+
+/** CRUD is restricted server-side to that school's own school_admin accounts. */
+export const updateSchoolAdminUser = (schoolId: string, userId: string, updates: { nom?: string; telephone?: string; statut?: 'actif' | 'inactif' }) =>
+  apiPatch<DbUser>(`/admin/schools/${schoolId}/admins/${userId}`, updates);
+export const resetSchoolAdminUserPassword = (schoolId: string, userId: string, newPassword: string) =>
+  apiPost<void>(`/admin/schools/${schoolId}/admins/${userId}/reset-password`, { new_password: newPassword });
+
 // ── Super admins (platform-level accounts, no school_id) ──────
 
 export interface SuperAdminCreateInput {
