@@ -16,6 +16,7 @@ from app.models.people import (
 from app.models.operations import Attendance, EvaluationType, Assessment, Grade
 from app.models.finance import Invoice, Payment
 from app.models.audit import AuditLog
+from app.models.communication import Announcement, AnnouncementTarget
 
 __all__ = [
     "Base",
@@ -44,4 +45,6 @@ __all__ = [
     "Invoice",
     "Payment",
     "AuditLog",
+    "Announcement",
+    "AnnouncementTarget",
 ]

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.authz import get_teacher_classroom_ids
 from app.db import get_db
 from app.deps import CurrentUser, require_role
 from app.models.people import Classroom
@@ -18,7 +19,13 @@ WRITE_ROLES = (Role.school_admin,)
 def list_classrooms(
     current_user: CurrentUser = Depends(require_role(*READ_ROLES)), db: Session = Depends(get_db)
 ):
-    rows = db.query(Classroom).filter(Classroom.school_id == current_user.school_id).order_by(Classroom.nom).all()
+    query = db.query(Classroom).filter(Classroom.school_id == current_user.school_id)
+    if current_user.role == Role.teacher:
+        classroom_ids = get_teacher_classroom_ids(db, current_user)
+        if not classroom_ids:
+            return envelope([])
+        query = query.filter(Classroom.id.in_(classroom_ids))
+    rows = query.order_by(Classroom.nom).all()
     return envelope([ClassroomOut.model_validate(r).model_dump() for r in rows])
 
 

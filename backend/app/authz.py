@@ -40,6 +40,21 @@ def get_parent_row(db: Session, current_user: CurrentUser) -> Parent:
     return parent
 
 
+def get_teacher_classroom_ids(db: Session, current_user: CurrentUser) -> set[str]:
+    """Classrooms this teacher is actually assigned to in the active academic year —
+    used to scope *reads* the same way assert_teacher_scope already scopes writes."""
+    year = get_active_academic_year_or_none(db, current_user.school_id)
+    if not year:
+        return set()
+    teacher = get_teacher_row(db, current_user)
+    rows = (
+        db.query(TeacherAssignment.classroom_id)
+        .filter(TeacherAssignment.teacher_id == teacher.id, TeacherAssignment.academic_year_id == year.id)
+        .all()
+    )
+    return {r[0] for r in rows}
+
+
 def assert_teacher_scope(
     db: Session, current_user: CurrentUser, classroom_id: str, subject_id: str | None = None
 ) -> None:

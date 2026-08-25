@@ -212,6 +212,12 @@ export const fetchStudentDocuments = async (_studentId: string) => [] as { id: s
 export const downloadStudentBulletin = (studentId: string, matricule: string, termId?: string) =>
   downloadFile(`/students/${studentId}/bulletin.pdf${termId ? `?term_id=${termId}` : ''}`, `bulletin-${matricule}.pdf`);
 
+export const downloadStudentCertificate = (studentId: string, matricule: string) =>
+  downloadFile(`/students/${studentId}/certificate.pdf`, `certificat-scolarite-${matricule}.pdf`);
+
+export const downloadStudentIdCard = (studentId: string, matricule: string) =>
+  downloadFile(`/students/${studentId}/id-card.pdf`, `carte-scolaire-${matricule}.pdf`);
+
 export const exportStudentsCsv = () => downloadFile('/students/export.csv', 'eleves.csv');
 
 export interface StudentImportResult {
@@ -401,6 +407,8 @@ export interface PaymentInput {
 export const fetchPayments = () => apiGet<DbPayment[]>('/payments');
 export const createPayment = (payment: PaymentInput) =>
   apiPost<{ payment: DbPayment; invoice: DbInvoice }>('/payments', payment);
+export const downloadPaymentReceipt = (paymentId: string) =>
+  downloadFile(`/payments/${paymentId}/receipt.pdf`, `recu-${paymentId.slice(0, 8)}.pdf`);
 
 // ── Academic years / staff / schools ─────────────────────────
 
@@ -559,7 +567,7 @@ export const fetchAuditLogs = (params: { limit?: number; offset?: number; action
   return apiGet<{ total: number; items: DbAuditLogEntry[] }>(`/audit-logs${query ? `?${query}` : ''}`);
 };
 
-// Communication module is deferred (out of scope for this pass) — no backend routes yet.
+// Notifications (SMS/email delivery log) remain out of scope — no backend route yet.
 export const fetchNotifications = async () => [] as {
   id: string;
   school_id: string;
@@ -571,25 +579,34 @@ export const fetchNotifications = async () => [] as {
   date: string;
 }[];
 
-export const fetchAnnouncements = async () => [] as {
+export interface DbAnnouncement {
   id: string;
   school_id: string;
   auteur_id: string | null;
   auteur_nom: string;
-  cible: string;
+  cible: 'tous' | 'parents' | 'enseignants' | 'classe';
   titre: string;
   contenu: string;
   date_publication: string;
-}[];
+}
 
-export const createAnnouncement = async (_announcement: {
-  auteur_id: string;
-  auteur_nom: string;
-  cible: string;
+export interface AnnouncementInput {
   titre: string;
   contenu: string;
-}) => {
-  throw new Error('Le module Communication n\'est pas encore disponible.');
+  cible: 'tous' | 'parents' | 'enseignants' | 'classe';
+}
+
+export const fetchAnnouncements = () => apiGet<DbAnnouncement[]>('/announcements');
+export const createAnnouncement = (announcement: AnnouncementInput) => apiPost<DbAnnouncement>('/announcements', announcement);
+export const deleteAnnouncement = (id: string) => apiDelete<void>(`/announcements/${id}`);
+
+// ── Reports export ────────────────────────────────────────────
+
+export const downloadReportPdf = (type: 'financial' | 'attendance' | 'grades', dateFrom?: string, dateTo?: string) => {
+  const qs = new URLSearchParams({ type });
+  if (dateFrom) qs.set('date_from', dateFrom);
+  if (dateTo) qs.set('date_to', dateTo);
+  return downloadFile(`/reports/export.pdf?${qs.toString()}`, `rapport-${type}.pdf`);
 };
 
 // ── Helpers ───────────────────────────────────────────────────

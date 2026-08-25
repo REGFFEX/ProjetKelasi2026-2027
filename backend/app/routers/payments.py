@@ -1,10 +1,14 @@
 from fastapi import APIRouter, Depends
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import CurrentUser, require_role
 from app.models.finance import Payment, InvoiceStatus
+from app.models.people import Student
+from app.models.school import School
 from app.models.user import Role
+from app.pdf.receipt import build_receipt_pdf
 from app.response import envelope, APIException
 from app.routers.invoices import get_scoped_invoice
 from app.schemas.finance import PaymentCreate, PaymentOut, InvoiceOut
@@ -64,4 +68,24 @@ def create_payment(
             "invoice": InvoiceOut.model_validate(invoice).model_dump(),
         },
         "Paiement enregistré.",
+    )
+
+
+@router.get("/{payment_id}/receipt.pdf")
+def get_payment_receipt(
+    payment_id: str,
+    current_user: CurrentUser = Depends(require_role(*READ_ROLES)),
+    db: Session = Depends(get_db),
+):
+    payment = db.get(Payment, payment_id)
+    if not payment or payment.school_id != current_user.school_id:
+        raise APIException(404, "Paiement introuvable.")
+    invoice = get_scoped_invoice(db, current_user, payment.invoice_id)
+    student = db.get(Student, invoice.student_id)
+    school = db.get(School, current_user.school_id)
+    pdf_bytes = build_receipt_pdf(db, payment, invoice, student, school)
+    filename = f"recu-{payment.id[:8]}.pdf"
+    return Response(
+        content=pdf_bytes, media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

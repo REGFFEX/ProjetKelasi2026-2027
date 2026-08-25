@@ -14,6 +14,8 @@ from app.models.people import Classroom, Student, Parent, StudentParent, Enrollm
 from app.models.school import School
 from app.models.user import Role, UserStatus
 from app.pdf.bulletin import build_bulletin_pdf
+from app.pdf.certificate import build_certificate_pdf
+from app.pdf.id_card import build_id_card_pdf
 from app.response import envelope, APIException
 from app.schemas.students import StudentCreate, StudentUpdate, StudentOut, StudentParentsSet
 from app.schemas.parents import ParentOut
@@ -287,6 +289,38 @@ def get_student_bulletin(
             raise APIException(404, "Période introuvable.")
     pdf_bytes = build_bulletin_pdf(db, student, school, term)
     filename = f"bulletin-{student.matricule}.pdf"
+    return Response(
+        content=pdf_bytes, media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/{student_id}/certificate.pdf")
+def get_student_certificate(
+    student_id: str,
+    current_user: CurrentUser = Depends(require_role(Role.school_admin, Role.secretary)),
+    db: Session = Depends(get_db),
+):
+    student = _get_scoped(db, current_user, student_id)
+    school = db.get(School, current_user.school_id)
+    pdf_bytes = build_certificate_pdf(db, student, school)
+    filename = f"certificat-scolarite-{student.matricule}.pdf"
+    return Response(
+        content=pdf_bytes, media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/{student_id}/id-card.pdf")
+def get_student_id_card(
+    student_id: str,
+    current_user: CurrentUser = Depends(require_role(Role.school_admin, Role.secretary)),
+    db: Session = Depends(get_db),
+):
+    student = _get_scoped(db, current_user, student_id)
+    school = db.get(School, current_user.school_id)
+    pdf_bytes = build_id_card_pdf(db, student, school)
+    filename = f"carte-scolaire-{student.matricule}.pdf"
     return Response(
         content=pdf_bytes, media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},

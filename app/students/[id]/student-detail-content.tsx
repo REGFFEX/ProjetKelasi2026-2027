@@ -16,6 +16,8 @@ import {
   fetchSubjects,
   fetchTerms,
   downloadStudentBulletin,
+  downloadStudentCertificate,
+  downloadStudentIdCard,
   formatMoney,
 } from '@/lib/api';
 import { Card } from '@/components/ui/card';
@@ -52,6 +54,8 @@ export function StudentDetailContent({ studentId }: { studentId: string }) {
   const [terms, setTerms] = useState<Awaited<ReturnType<typeof fetchTerms>>>([]);
   const [bulletinTermId, setBulletinTermId] = useState('');
   const [downloadingBulletin, setDownloadingBulletin] = useState(false);
+  const [downloadingCertificate, setDownloadingCertificate] = useState(false);
+  const [downloadingCard, setDownloadingCard] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,6 +104,30 @@ export function StudentDetailContent({ studentId }: { studentId: string }) {
       console.error('Failed to download bulletin:', e);
     } finally {
       setDownloadingBulletin(false);
+    }
+  };
+
+  const handleDownloadCertificate = async () => {
+    if (!student) return;
+    setDownloadingCertificate(true);
+    try {
+      await downloadStudentCertificate(student.id, student.matricule);
+    } catch (e) {
+      console.error('Failed to download certificate:', e);
+    } finally {
+      setDownloadingCertificate(false);
+    }
+  };
+
+  const handleDownloadIdCard = async () => {
+    if (!student) return;
+    setDownloadingCard(true);
+    try {
+      await downloadStudentIdCard(student.id, student.matricule);
+    } catch (e) {
+      console.error('Failed to download ID card:', e);
+    } finally {
+      setDownloadingCard(false);
     }
   };
 
@@ -364,11 +392,19 @@ export function StudentDetailContent({ studentId }: { studentId: string }) {
             </div>
             <div className="mt-4 pt-4 border-t border-border space-y-2">
               <p className="text-xs font-medium text-foreground mb-2">Générer un document officiel</p>
-              <Button variant="outline" size="sm" className="w-full gap-1.5 justify-start rounded-xl">
-                <FileText className="h-4 w-4" /> <span className="truncate">Certificat de scolarité</span>
+              <Button
+                variant="outline" size="sm" onClick={handleDownloadCertificate} disabled={downloadingCertificate}
+                className="w-full gap-1.5 justify-start rounded-xl"
+              >
+                {downloadingCertificate ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                <span className="truncate">Certificat de scolarité</span>
               </Button>
-              <Button variant="outline" size="sm" className="w-full gap-1.5 justify-start rounded-xl">
-                <FileText className="h-4 w-4" /> <span className="truncate">Carte scolaire</span>
+              <Button
+                variant="outline" size="sm" onClick={handleDownloadIdCard} disabled={downloadingCard}
+                className="w-full gap-1.5 justify-start rounded-xl"
+              >
+                {downloadingCard ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                <span className="truncate">Carte scolaire</span>
               </Button>
               <select
                 value={bulletinTermId}

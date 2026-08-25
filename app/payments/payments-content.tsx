@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { Wallet, Plus, Search, Download, FileText, ArrowLeft, Save, CreditCard, TrendingUp, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
-import { fetchInvoices, fetchPayments, fetchStudents, fetchClassrooms, formatMoney, createPayment } from '@/lib/api';
+import { fetchInvoices, fetchPayments, fetchStudents, fetchClassrooms, formatMoney, createPayment, downloadPaymentReceipt } from '@/lib/api';
 import type { PaymentMethod } from '@/lib/types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,6 +36,8 @@ export function PaymentsContent() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedInvoice, setSelectedInvoice] = useState<Awaited<ReturnType<typeof fetchInvoices>>[number] | null>(null);
+  const [lastPaymentId, setLastPaymentId] = useState<string | null>(null);
+  const [downloadingReceipt, setDownloadingReceipt] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('especes');
   const [submittingPayment, setSubmittingPayment] = useState(false);
@@ -227,7 +229,14 @@ export function PaymentsContent() {
                             <Wallet className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Payer</span>
                           </Button>
                         ) : (
-                          <Button size="sm" variant="ghost" className="gap-1.5 rounded-xl active:scale-[0.97]" onClick={() => { setSelectedInvoice(inv); setView('receipt'); }}>
+                          <Button
+                            size="sm" variant="ghost" className="gap-1.5 rounded-xl active:scale-[0.97]"
+                            onClick={() => {
+                              setSelectedInvoice(inv);
+                              setLastPaymentId(payments.find(p => p.invoice_id === inv.id)?.id || null);
+                              setView('receipt');
+                            }}
+                          >
                             <FileText className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Reçu</span>
                           </Button>
                         )}
@@ -311,6 +320,7 @@ export function PaymentsContent() {
         setInvoices(prev => prev.map(inv => (inv.id === result.invoice.id ? result.invoice : inv)));
         setPayments(prev => [result.payment, ...prev]);
         setSelectedInvoice(result.invoice);
+        setLastPaymentId(result.payment.id);
         setView('receipt');
       } catch (e) {
         console.error('Failed to record payment:', e);
@@ -442,14 +452,30 @@ export function PaymentsContent() {
     const student = students.find(s => s.id === selectedInvoice.student_id);
     const invoicePayments = payments.filter(p => p.invoice_id === selectedInvoice.id);
 
+    const handleDownloadReceipt = async () => {
+      if (!lastPaymentId) return;
+      setDownloadingReceipt(true);
+      try {
+        await downloadPaymentReceipt(lastPaymentId);
+      } catch (e) {
+        console.error('Failed to download receipt:', e);
+      } finally {
+        setDownloadingReceipt(false);
+      }
+    };
+
     return (
       <div className="max-w-2xl mx-auto space-y-5 sm:space-y-6 animate-fade-in">
         <div className="flex items-center justify-between gap-3">
           <Button variant="ghost" size="sm" className="gap-1.5 rounded-xl active:scale-[0.97] shrink-0" onClick={() => setView('list')}>
             <ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">Retour</span>
           </Button>
-          <Button className="gap-1.5 rounded-xl active:scale-[0.97] shrink-0">
-            <Download className="h-4 w-4" /> <span className="hidden sm:inline">Télécharger PDF</span>
+          <Button
+            className="gap-1.5 rounded-xl active:scale-[0.97] shrink-0" onClick={handleDownloadReceipt}
+            disabled={!lastPaymentId || downloadingReceipt}
+          >
+            {downloadingReceipt ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            <span className="hidden sm:inline">Télécharger PDF</span>
           </Button>
         </div>
 

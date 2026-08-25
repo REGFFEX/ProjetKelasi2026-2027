@@ -3,7 +3,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { BarChart3, Download, Wallet, CheckSquare, ClipboardList, TrendingUp, TrendingDown, Users, FileText, Clock, Loader2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart, Pie, Cell } from 'recharts';
-import { fetchInvoices, fetchPayments, fetchAttendance, fetchGrades, fetchStudents, fetchClassrooms, formatMoney } from '@/lib/api';
+import { fetchInvoices, fetchPayments, fetchAttendance, fetchGrades, fetchAssessments, fetchStudents, fetchClassrooms, formatMoney, downloadReportPdf } from '@/lib/api';
+import { ApiError } from '@/lib/api-client';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -29,18 +30,21 @@ export function ReportsContent() {
   const [payments, setPayments] = useState<Awaited<ReturnType<typeof fetchPayments>>>([]);
   const [attendance, setAttendance] = useState<Awaited<ReturnType<typeof fetchAttendance>>>([]);
   const [grades, setGrades] = useState<Awaited<ReturnType<typeof fetchGrades>>>([]);
+  const [assessments, setAssessments] = useState<Awaited<ReturnType<typeof fetchAssessments>>>([]);
   const [students, setStudents] = useState<Awaited<ReturnType<typeof fetchStudents>>>([]);
   const [classrooms, setClassrooms] = useState<Awaited<ReturnType<typeof fetchClassrooms>>>([]);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [inv, pay, att, g, s, c] = await Promise.all([
+        const [inv, pay, att, g, a, s, c] = await Promise.all([
           fetchInvoices(),
           fetchPayments(),
           fetchAttendance(),
           fetchGrades(),
+          fetchAssessments(),
           fetchStudents(),
           fetchClassrooms(),
         ]);
@@ -49,6 +53,7 @@ export function ReportsContent() {
         setPayments(pay);
         setAttendance(att);
         setGrades(g);
+        setAssessments(a);
         setStudents(s);
         setClassrooms(c);
       } catch (e) {
@@ -60,17 +65,48 @@ export function ReportsContent() {
     return () => { cancelled = true; };
   }, []);
 
+  // Date range filter — applied once here, then every computation below uses the filtered arrays.
+  const invoicesInRange = useMemo(
+    () => invoices.filter(inv => inv.date_emission >= dateFrom && inv.date_emission <= dateTo),
+    [invoices, dateFrom, dateTo]
+  );
+  const paymentsInRange = useMemo(
+    () => payments.filter(p => p.date_paiement >= dateFrom && p.date_paiement <= dateTo),
+    [payments, dateFrom, dateTo]
+  );
+  const attendanceInRange = useMemo(
+    () => attendance.filter(a => a.date >= dateFrom && a.date <= dateTo),
+    [attendance, dateFrom, dateTo]
+  );
+  const gradesInRange = useMemo(() => {
+    const assessmentIdsInRange = new Set(
+      assessments.filter(a => a.date >= dateFrom && a.date <= dateTo).map(a => a.id)
+    );
+    return grades.filter(g => assessmentIdsInRange.has(g.assessment_id));
+  }, [grades, assessments, dateFrom, dateTo]);
+
+  const handleExportPdf = async () => {
+    setExporting(true);
+    try {
+      await downloadReportPdf(activeReport, dateFrom, dateTo);
+    } catch (e) {
+      console.error('Failed to export report:', e instanceof ApiError ? e.message : e);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // Financial data
-  const totalBilled = invoices.reduce((s, inv) => s + inv.montant_total, 0);
-  const totalCollected = invoices.reduce((s, inv) => s + inv.montant_paye, 0);
-  const totalOutstanding = invoices.reduce((s, inv) => s + inv.reste_a_payer, 0);
+  const totalBilled = invoicesInRange.reduce((s, inv) => s + inv.montant_total, 0);
+  const totalCollected = invoicesInRange.reduce((s, inv) => s + inv.montant_paye, 0);
+  const totalOutstanding = invoicesInRange.reduce((s, inv) => s + inv.reste_a_payer, 0);
   const collectionRate = totalBilled > 0 ? ((totalCollected / totalBilled) * 100).toFixed(1) : '0';
-  const paidCount = invoices.filter(i => i.statut === 'paye').length;
-  const partialCount = invoices.filter(i => i.statut === 'partiel').length;
-  const unpaidCount = invoices.filter(i => i.statut === 'impaye').length;
+  const paidCount = invoicesInRange.filter(i => i.statut === 'paye').length;
+  const partialCount = invoicesInRange.filter(i => i.statut === 'partiel').length;
+  const unpaidCount = invoicesInRange.filter(i => i.statut === 'impaye').length;
 
   const paymentMethodData = ['especes', 'mobile_money', 'virement', 'cheque'].map(method => {
-    const methodPayments = payments.filter(p => p.mode_paiement === method);
+    const methodPayments = paymentsInRange.filter(p => p.mode_paiement === method);
     return {
       method: method === 'especes' ? 'Espèces' : method === 'mobile_money' ? 'Mobile Money' : method === 'virement' ? 'Virement' : 'Chèque',
       montant: methodPayments.reduce((s, p) => s + p.montant, 0),
@@ -80,7 +116,7 @@ export function ReportsContent() {
 
   // Attendance data
   const attendanceByClass = classrooms.map(c => {
-    const classAttendance = attendance.filter(a => a.classroom_id === c.id);
+    const classAttendance = attendanceInRange.filter(a => a.classroom_id === c.id);
     return {
       classe: c.nom,
       present: classAttendance.filter(a => a.statut === 'present').length,
@@ -91,16 +127,16 @@ export function ReportsContent() {
   });
 
   const attendanceDistribution = [
-    { name: 'Présent', value: attendance.filter(a => a.statut === 'present').length },
-    { name: 'Absent', value: attendance.filter(a => a.statut === 'absent').length },
-    { name: 'Retard', value: attendance.filter(a => a.statut === 'retard').length },
-    { name: 'Justifié', value: attendance.filter(a => a.statut === 'justifie').length },
+    { name: 'Présent', value: attendanceInRange.filter(a => a.statut === 'present').length },
+    { name: 'Absent', value: attendanceInRange.filter(a => a.statut === 'absent').length },
+    { name: 'Retard', value: attendanceInRange.filter(a => a.statut === 'retard').length },
+    { name: 'Justifié', value: attendanceInRange.filter(a => a.statut === 'justifie').length },
   ];
 
   // Grades data
   const gradesByClass = classrooms.map(c => {
     const classStudents = students.filter(s => s.classroom_id === c.id);
-    const classGrades = grades
+    const classGrades = gradesInRange
       .filter(g => classStudents.some(s => s.id === g.student_id))
       .filter((g): g is typeof g & { note: number } => g.note !== null);
     const avg = classGrades.length > 0
@@ -129,8 +165,8 @@ export function ReportsContent() {
           <h1 className="text-xl sm:text-2xl font-bold text-foreground">Rapports</h1>
           <p className="text-muted-foreground mt-1 truncate">Rapports financiers, de présence et de notes</p>
         </div>
-        <Button variant="outline" className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform">
-          <Download className="h-4 w-4" /> <span className="hidden sm:inline">Exporter PDF</span>
+        <Button variant="outline" onClick={handleExportPdf} disabled={exporting} className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform">
+          {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} <span className="hidden sm:inline">Exporter PDF</span>
         </Button>
       </div>
 
@@ -269,7 +305,7 @@ export function ReportsContent() {
                 <p className="text-xs text-muted-foreground truncate">Taux de présence</p>
               </div>
               <p className="text-lg sm:text-xl font-bold text-foreground mt-1 truncate">
-                {attendance.length > 0 ? ((attendance.filter(a => a.statut === 'present').length / attendance.length) * 100).toFixed(1) : 0}%
+                {attendanceInRange.length > 0 ? ((attendanceInRange.filter(a => a.statut === 'present').length / attendanceInRange.length) * 100).toFixed(1) : 0}%
               </p>
             </Card>
             <Card className="p-4 sm:p-5 rounded-2xl shadow-card hover:shadow-card-hover transition-shadow">
@@ -277,21 +313,21 @@ export function ReportsContent() {
                 <Users className="h-4 w-4 text-info shrink-0" />
                 <p className="text-xs text-muted-foreground truncate">Total présences</p>
               </div>
-              <p className="text-lg sm:text-xl font-bold text-foreground mt-1 truncate">{attendance.filter(a => a.statut === 'present').length}</p>
+              <p className="text-lg sm:text-xl font-bold text-foreground mt-1 truncate">{attendanceInRange.filter(a => a.statut === 'present').length}</p>
             </Card>
             <Card className="p-4 sm:p-5 rounded-2xl shadow-card hover:shadow-card-hover transition-shadow">
               <div className="flex items-center gap-2">
                 <TrendingDown className="h-4 w-4 text-destructive shrink-0" />
                 <p className="text-xs text-muted-foreground truncate">Total absences</p>
               </div>
-              <p className="text-lg sm:text-xl font-bold text-foreground mt-1 truncate">{attendance.filter(a => a.statut === 'absent').length}</p>
+              <p className="text-lg sm:text-xl font-bold text-foreground mt-1 truncate">{attendanceInRange.filter(a => a.statut === 'absent').length}</p>
             </Card>
             <Card className="p-4 sm:p-5 rounded-2xl shadow-card hover:shadow-card-hover transition-shadow">
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-warning shrink-0" />
                 <p className="text-xs text-muted-foreground truncate">Total retards</p>
               </div>
-              <p className="text-lg sm:text-xl font-bold text-foreground mt-1 truncate">{attendance.filter(a => a.statut === 'retard').length}</p>
+              <p className="text-lg sm:text-xl font-bold text-foreground mt-1 truncate">{attendanceInRange.filter(a => a.statut === 'retard').length}</p>
             </Card>
           </div>
 

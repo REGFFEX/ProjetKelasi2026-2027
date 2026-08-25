@@ -3,7 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.authz import assert_teacher_scope, write_audit_log
+from app.authz import assert_teacher_scope, get_teacher_classroom_ids, write_audit_log
 from app.db import get_db
 from app.deps import CurrentUser, require_role
 from app.models.operations import Attendance
@@ -25,6 +25,11 @@ def list_attendance(
     db: Session = Depends(get_db),
 ):
     query = db.query(Attendance).filter(Attendance.school_id == current_user.school_id)
+    if current_user.role == Role.teacher:
+        classroom_ids = get_teacher_classroom_ids(db, current_user)
+        if not classroom_ids:
+            return envelope([])
+        query = query.filter(Attendance.classroom_id.in_(classroom_ids))
     if classroom_id:
         query = query.filter(Attendance.classroom_id == classroom_id)
     if date_:

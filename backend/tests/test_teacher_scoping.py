@@ -1,6 +1,7 @@
 from datetime import date
 
 from app.models.academic import AcademicYear, AcademicYearStatus, Cycle, EvaluationMode, Level, Term
+from app.models.operations import Attendance, AttendanceStatus
 from app.models.people import Classroom, Student, Subject, Teacher, TeacherAssignment
 from app.models.school import School
 from app.models.user import Role, User, UserStatus
@@ -198,3 +199,60 @@ def test_teacher_attendance_scoped_but_secretary_is_not(client, db_session):
         },
     )
     assert secretary_ok.status_code == 200
+
+
+def test_teacher_reads_are_scoped_to_assigned_classrooms(client, db_session):
+    """Reads must be scoped the same way writes already are — a teacher shouldn't see
+    classrooms/attendance/assessments/grades for classes they aren't assigned to."""
+    ctx = _setup(db_session)
+
+    from app.models.operations import Assessment
+
+    own = Assessment(
+        school_id=ctx["school"].id, subject_id=ctx["math"].id, classroom_id=ctx["classroom_a"].id,
+        term_id=ctx["term"].id, libelle="Math A", date=date(2026, 10, 1), coefficient=1,
+    )
+    other = Assessment(
+        school_id=ctx["school"].id, subject_id=ctx["french"].id, classroom_id=ctx["classroom_b"].id,
+        term_id=ctx["term"].id, libelle="Français B", date=date(2026, 10, 1), coefficient=1,
+    )
+    db_session.add_all([own, other])
+    db_session.flush()
+    from app.models.operations import Grade
+
+    db_session.add_all([
+        Grade(school_id=ctx["school"].id, assessment_id=own.id, student_id=ctx["student"].id, note=15),
+        Grade(school_id=ctx["school"].id, assessment_id=other.id, student_id=ctx["student"].id, note=10),
+    ])
+    other_student = Student(
+        school_id=ctx["school"].id, matricule="S-2", nom="Eleve", prenom="Deux", date_naissance=date(2015, 1, 1),
+        statut=UserStatus.actif,
+    )
+    db_session.add(other_student)
+    db_session.flush()
+    db_session.add(Attendance(
+        school_id=ctx["school"].id, student_id=ctx["student"].id, classroom_id=ctx["classroom_a"].id,
+        date=date(2026, 10, 1), statut=AttendanceStatus.present,
+    ))
+    db_session.add(Attendance(
+        school_id=ctx["school"].id, student_id=other_student.id, classroom_id=ctx["classroom_b"].id,
+        date=date(2026, 10, 1), statut=AttendanceStatus.absent,
+    ))
+    db_session.commit()
+
+    _login_teacher(client, ctx["school"].id)
+
+    classrooms = client.get("/api/v1/classrooms").json()["data"]
+    assert {c["id"] for c in classrooms} == {ctx["classroom_a"].id}
+
+    attendance = client.get("/api/v1/attendance").json()["data"]
+    assert all(a["classroom_id"] == ctx["classroom_a"].id for a in attendance)
+    assert len(attendance) == 1
+
+    assessments = client.get("/api/v1/assessments").json()["data"]
+    assert {a["id"] for a in assessments} == {own.id}
+
+    grades = client.get("/api/v1/grades").json()["data"]
+    assert {g["id"] for g in grades} == {
+        g.id for g in db_session.query(Grade).filter(Grade.assessment_id == own.id).all()
+    }

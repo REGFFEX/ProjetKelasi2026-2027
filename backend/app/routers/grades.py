@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.authz import assert_teacher_scope, write_audit_log
+from app.authz import assert_teacher_scope, get_teacher_classroom_ids, write_audit_log
 from app.db import get_db
 from app.deps import CurrentUser, require_role
 from app.models.operations import Assessment, EvaluationType, Grade
@@ -47,12 +47,13 @@ def create_evaluation_type(
 def list_assessments(
     current_user: CurrentUser = Depends(require_role(*READ_ROLES)), db: Session = Depends(get_db)
 ):
-    rows = (
-        db.query(Assessment)
-        .filter(Assessment.school_id == current_user.school_id)
-        .order_by(Assessment.date.desc())
-        .all()
-    )
+    query = db.query(Assessment).filter(Assessment.school_id == current_user.school_id)
+    if current_user.role == Role.teacher:
+        classroom_ids = get_teacher_classroom_ids(db, current_user)
+        if not classroom_ids:
+            return envelope([])
+        query = query.filter(Assessment.classroom_id.in_(classroom_ids))
+    rows = query.order_by(Assessment.date.desc()).all()
     return envelope([AssessmentOut.model_validate(r).model_dump() for r in rows])
 
 
@@ -77,6 +78,14 @@ def list_grades(
     db: Session = Depends(get_db),
 ):
     query = db.query(Grade).filter(Grade.school_id == current_user.school_id)
+    if current_user.role == Role.teacher:
+        classroom_ids = get_teacher_classroom_ids(db, current_user)
+        if not classroom_ids:
+            return envelope([])
+        scoped_assessment_ids = [
+            a.id for a in db.query(Assessment.id).filter(Assessment.classroom_id.in_(classroom_ids)).all()
+        ]
+        query = query.filter(Grade.assessment_id.in_(scoped_assessment_ids))
     if assessment_id:
         query = query.filter(Grade.assessment_id == assessment_id)
     rows = query.all()

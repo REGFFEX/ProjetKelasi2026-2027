@@ -2,12 +2,33 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { ClipboardList, Plus, Eye, CheckCircle, Clock, FileText, Download, Send, ArrowLeft, Save, Loader2 } from 'lucide-react';
-import { fetchAssessments, fetchSubjects, fetchClassrooms, fetchStudents, fetchGrades, fetchCycles, fetchLevels, upsertGrades } from '@/lib/api';
+import {
+  fetchAssessments,
+  fetchSubjects,
+  fetchClassrooms,
+  fetchStudents,
+  fetchGrades,
+  fetchCycles,
+  fetchLevels,
+  fetchEvaluationTypes,
+  fetchTerms,
+  createAssessment,
+  upsertGrades,
+  type AssessmentInput,
+} from '@/lib/api';
 import { ApiError } from '@/lib/api-client';
 import type { GradeStatus } from '@/lib/types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
 const statusConfig: Record<GradeStatus, { label: string; icon: typeof CheckCircle; color: string; bg: string; dot: string }> = {
@@ -36,12 +57,20 @@ export function GradesContent() {
   const [grades, setGrades] = useState<Awaited<ReturnType<typeof fetchGrades>>>([]);
   const [cycles, setCycles] = useState<Awaited<ReturnType<typeof fetchCycles>>>([]);
   const [levels, setLevels] = useState<Awaited<ReturnType<typeof fetchLevels>>>([]);
+  const [evaluationTypes, setEvaluationTypes] = useState<Awaited<ReturnType<typeof fetchEvaluationTypes>>>([]);
+  const [terms, setTerms] = useState<Awaited<ReturnType<typeof fetchTerms>>>([]);
+
+  const emptyAssessmentForm = { libelle: '', subject_id: '', classroom_id: '', term_id: '', evaluation_type_id: '', date: '', coefficient: 1 };
+  const [showCreateAssessment, setShowCreateAssessment] = useState(false);
+  const [assessmentForm, setAssessmentForm] = useState(emptyAssessmentForm);
+  const [savingAssessment, setSavingAssessment] = useState(false);
+  const [assessmentError, setAssessmentError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [a, s, c, st, g, cyc, lvl] = await Promise.all([
+        const [a, s, c, st, g, cyc, lvl, et, tm] = await Promise.all([
           fetchAssessments(),
           fetchSubjects(),
           fetchClassrooms(),
@@ -49,6 +78,8 @@ export function GradesContent() {
           fetchGrades(),
           fetchCycles(),
           fetchLevels(),
+          fetchEvaluationTypes(),
+          fetchTerms(),
         ]);
         if (cancelled) return;
         setAssessments(a);
@@ -58,6 +89,8 @@ export function GradesContent() {
         setGrades(g);
         setCycles(cyc);
         setLevels(lvl);
+        setEvaluationTypes(et);
+        setTerms(tm);
       } catch (e) {
         console.error('Failed to load grades data:', e);
       } finally {
@@ -66,6 +99,37 @@ export function GradesContent() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  const openCreateAssessment = () => {
+    setAssessmentForm(emptyAssessmentForm);
+    setAssessmentError('');
+    setShowCreateAssessment(true);
+  };
+
+  const handleCreateAssessment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assessmentForm.libelle.trim() || !assessmentForm.subject_id || !assessmentForm.classroom_id || !assessmentForm.term_id || !assessmentForm.date) return;
+    setSavingAssessment(true);
+    setAssessmentError('');
+    try {
+      const payload: AssessmentInput = {
+        libelle: assessmentForm.libelle,
+        subject_id: assessmentForm.subject_id,
+        classroom_id: assessmentForm.classroom_id,
+        term_id: assessmentForm.term_id,
+        date: assessmentForm.date,
+        coefficient: assessmentForm.coefficient,
+        evaluation_type_id: assessmentForm.evaluation_type_id || null,
+      };
+      const created = await createAssessment(payload);
+      setAssessments(prev => [created, ...prev]);
+      setShowCreateAssessment(false);
+    } catch (err) {
+      setAssessmentError(err instanceof ApiError ? err.message : "Échec de la création de l'évaluation.");
+    } finally {
+      setSavingAssessment(false);
+    }
+  };
 
   const isQualitatif = (classroomId: string) => {
     const classroom = classrooms.find(c => c.id === classroomId);
@@ -122,10 +186,85 @@ export function GradesContent() {
             <h1 className="text-xl sm:text-2xl font-bold text-foreground">Notes & Évaluations</h1>
             <p className="text-sm text-muted-foreground mt-0.5 hidden sm:block">Gérez les évaluations, la saisie et la publication des notes</p>
           </div>
-          <Button className="gap-1.5 rounded-xl shrink-0 active:scale-95 transition-all">
+          <Button onClick={openCreateAssessment} className="gap-1.5 rounded-xl shrink-0 active:scale-95 transition-all">
             <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nouvelle évaluation</span><span className="sm:hidden">Évaluation</span>
           </Button>
         </div>
+
+        <Dialog open={showCreateAssessment} onOpenChange={setShowCreateAssessment}>
+          <DialogContent className="rounded-2xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Nouvelle évaluation</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleCreateAssessment} className="space-y-3">
+              <div>
+                <Label htmlFor="as-libelle">Intitulé *</Label>
+                <Input id="as-libelle" placeholder="ex: Interrogation 1" value={assessmentForm.libelle} onChange={e => setAssessmentForm({ ...assessmentForm, libelle: e.target.value })} required className="mt-1.5 rounded-xl" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="as-subject">Matière *</Label>
+                  <select
+                    id="as-subject" value={assessmentForm.subject_id} onChange={e => setAssessmentForm({ ...assessmentForm, subject_id: e.target.value })} required
+                    className="mt-1.5 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="">Choisir...</option>
+                    {subjects.map(s => <option key={s.id} value={s.id}>{s.nom}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="as-classroom">Classe *</Label>
+                  <select
+                    id="as-classroom" value={assessmentForm.classroom_id} onChange={e => setAssessmentForm({ ...assessmentForm, classroom_id: e.target.value })} required
+                    className="mt-1.5 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="">Choisir...</option>
+                    {classrooms.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="as-term">Période *</Label>
+                  <select
+                    id="as-term" value={assessmentForm.term_id} onChange={e => setAssessmentForm({ ...assessmentForm, term_id: e.target.value })} required
+                    className="mt-1.5 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="">Choisir...</option>
+                    {terms.map(t => <option key={t.id} value={t.id}>{t.libelle}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="as-type">Type</Label>
+                  <select
+                    id="as-type" value={assessmentForm.evaluation_type_id} onChange={e => setAssessmentForm({ ...assessmentForm, evaluation_type_id: e.target.value })}
+                    className="mt-1.5 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="">—</option>
+                    {evaluationTypes.map(et => <option key={et.id} value={et.id}>{et.nom}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="as-date">Date *</Label>
+                  <Input id="as-date" type="date" value={assessmentForm.date} onChange={e => setAssessmentForm({ ...assessmentForm, date: e.target.value })} required className="mt-1.5 rounded-xl" />
+                </div>
+                <div>
+                  <Label htmlFor="as-coef">Coefficient</Label>
+                  <Input id="as-coef" type="number" min={1} value={assessmentForm.coefficient} onChange={e => setAssessmentForm({ ...assessmentForm, coefficient: parseInt(e.target.value, 10) || 1 })} className="mt-1.5 rounded-xl" />
+                </div>
+              </div>
+              {assessmentError && <div className="rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive">{assessmentError}</div>}
+              <DialogFooter>
+                <Button type="submit" disabled={savingAssessment} className="gap-1.5 rounded-xl">
+                  {savingAssessment ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  Créer
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
 
         {/* Filters */}
         <div className="flex flex-wrap gap-3">
