@@ -21,6 +21,7 @@ export interface DbStudent {
   photo: string | null;
   classroom_id: string | null;
   statut: string;
+  created_at: string;
 }
 
 export interface DbParent {
@@ -201,6 +202,11 @@ export const createStudent = (student: StudentInput) => apiPost<DbStudent>('/stu
 export const updateStudent = (id: string, updates: Partial<StudentInput>) =>
   apiPatch<DbStudent>(`/students/${id}`, updates);
 export const deleteStudent = (id: string) => apiDelete<void>(`/students/${id}`);
+export const uploadStudentPhoto = (id: string, file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return apiUpload<DbStudent>(`/students/${id}/photo`, formData);
+};
 export const fetchStudentParents = (studentId: string) => apiGet<DbParent[]>(`/students/${studentId}/parents`);
 export const setStudentParents = (studentId: string, parentIds: string[]) =>
   apiPut<void>(`/students/${studentId}/parents`, { parent_ids: parentIds });
@@ -466,6 +472,12 @@ export interface SchoolSelfUpdateInput {
 }
 
 export const updateMySchool = (updates: SchoolSelfUpdateInput) => apiPatch<DbSchool>('/schools/me', updates);
+
+export const uploadSchoolLogo = (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return apiUpload<DbSchool>('/schools/me/logo', formData);
+};
 
 // ── Super admin: manage all schools + subscriptions ──────────
 

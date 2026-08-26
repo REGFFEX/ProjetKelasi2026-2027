@@ -18,7 +18,9 @@ import {
   createStudent,
   updateStudent,
   setStudentParents,
+  uploadStudentPhoto,
 } from '@/lib/api';
+import { ApiError, assetUrl } from '@/lib/api-client';
 
 interface ClassroomRow { id: string; nom: string; }
 interface ParentRow { id: string; nom: string; telephone: string; profession: string; }
@@ -30,6 +32,9 @@ export function StudentFormContent({ mode, studentId }: { mode: 'create' | 'edit
   const [saving, setSaving] = useState(false);
   const [classrooms, setClassrooms] = useState<ClassroomRow[]>([]);
   const [parents, setParents] = useState<ParentRow[]>([]);
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoError, setPhotoError] = useState('');
 
   const [formData, setFormData] = useState({
     prenom: '',
@@ -64,6 +69,7 @@ export function StudentFormContent({ mode, studentId }: { mode: 'create' | 'edit
               statut: s.statut as 'actif' | 'inactif',
               parentIds: linkedParents.map(p => p.id),
             }));
+            setPhoto(s.photo);
           }
         }
       } catch (err) {
@@ -96,6 +102,22 @@ export function StudentFormContent({ mode, studentId }: { mode: 'create' | 'edit
     } catch (err) {
       console.error('Save error:', err);
       setSaving(false);
+    }
+  };
+
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !studentId) return;
+    setUploadingPhoto(true);
+    setPhotoError('');
+    try {
+      const updated = await uploadStudentPhoto(studentId, file);
+      setPhoto(updated.photo);
+    } catch (err) {
+      setPhotoError(err instanceof ApiError ? err.message : 'Échec du téléversement de la photo.');
+    } finally {
+      setUploadingPhoto(false);
     }
   };
 
@@ -175,14 +197,37 @@ export function StudentFormContent({ mode, studentId }: { mode: 'create' | 'edit
         <Card className="p-4 sm:p-6 shadow-card rounded-2xl">
           <h3 className="font-semibold text-foreground mb-4 text-sm sm:text-base">Photo</h3>
           <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/15 to-info/10 text-primary text-xl sm:text-2xl font-bold shrink-0">
-              {formData.prenom && formData.nom ? `${formData.prenom[0]}${formData.nom[0]}` : '?'}
-            </div>
+            {photo ? (
+              <img
+                src={assetUrl(photo)} alt="Photo de l'élève"
+                className="h-16 w-16 sm:h-20 sm:w-20 rounded-2xl object-cover shrink-0 border border-border"
+              />
+            ) : (
+              <div className="flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/15 to-info/10 text-primary text-xl sm:text-2xl font-bold shrink-0">
+                {formData.prenom && formData.nom ? `${formData.prenom[0]}${formData.nom[0]}` : '?'}
+              </div>
+            )}
             <div className="min-w-0">
-              <Button type="button" variant="outline" size="sm" className="gap-1.5 rounded-xl">
-                <Upload className="h-4 w-4" /> <span className="hidden sm:inline">Téléverser une photo</span><span className="sm:hidden">Photo</span>
-              </Button>
-              <p className="text-xs text-muted-foreground mt-1.5">JPG, PNG max 2MB</p>
+              {studentId ? (
+                <label>
+                  <input type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={handlePhotoChange} disabled={uploadingPhoto} />
+                  <span className={cn(
+                    'inline-flex items-center gap-1.5 rounded-xl border border-input px-3 py-1.5 text-sm font-medium cursor-pointer hover:bg-muted/50 transition-colors',
+                    uploadingPhoto && 'opacity-60 pointer-events-none'
+                  )}>
+                    {uploadingPhoto ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                    <span className="hidden sm:inline">Téléverser une photo</span><span className="sm:hidden">Photo</span>
+                  </span>
+                </label>
+              ) : (
+                <Button type="button" variant="outline" size="sm" disabled title="Enregistrez d'abord la fiche de l'élève" className="gap-1.5 rounded-xl">
+                  <Upload className="h-4 w-4" /> <span className="hidden sm:inline">Téléverser une photo</span><span className="sm:hidden">Photo</span>
+                </Button>
+              )}
+              <p className="text-xs text-muted-foreground mt-1.5">
+                {studentId ? 'JPG, PNG ou WebP, 2 Mo maximum' : "Disponible après l'enregistrement"}
+              </p>
+              {photoError && <p className="text-xs text-destructive mt-1">{photoError}</p>}
             </div>
           </div>
         </Card>

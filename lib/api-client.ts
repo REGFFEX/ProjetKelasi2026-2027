@@ -8,6 +8,18 @@ interface Envelope<T> {
   data: T;
 }
 
+/**
+ * A 401 mid-session (cookie rejected/expired/account deactivated) used to leave the UI
+ * silently stuck — buttons failing with a raw "Non authentifié" and no way out short of a
+ * manual refresh. This forces a clean logout instead. `/auth/login` and `/auth/me` are
+ * exempt since a 401 there is the expected, already-handled "not logged in yet" case.
+ */
+function notifyUnauthorized(path: string): void {
+  if (typeof window === 'undefined') return;
+  if (path.startsWith('/auth/login') || path.startsWith('/auth/me')) return;
+  window.dispatchEvent(new Event('kelasi:unauthorized'));
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   let res: Response;
   try {
@@ -22,6 +34,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   } catch {
     throw new ApiError('Impossible de contacter le serveur. Vérifiez votre connexion.');
   }
+
+  if (res.status === 401) notifyUnauthorized(path);
 
   const body = (await res.json().catch(() => null)) as Envelope<T> | null;
 
@@ -48,6 +62,9 @@ export const apiDelete = <T>(path: string): Promise<T> => request<T>(path, { met
 export const apiUpload = <T>(path: string, formData: FormData): Promise<T> =>
   request<T>(path, { method: 'POST', body: formData });
 
+/** Builds a displayable URL for a relative path returned by an upload endpoint (e.g. "uploads/logos/x.png"). */
+export const assetUrl = (relativePath: string): string => `${API_BASE}/${relativePath}`;
+
 /** For binary downloads (PDF/CSV) that don't go through the {success,message,data} envelope. */
 async function fetchBlob(path: string, options: RequestInit = {}): Promise<{ blob: Blob; filename: string | null }> {
   let res: Response;
@@ -56,6 +73,7 @@ async function fetchBlob(path: string, options: RequestInit = {}): Promise<{ blo
   } catch {
     throw new ApiError('Impossible de contacter le serveur. Vérifiez votre connexion.');
   }
+  if (res.status === 401) notifyUnauthorized(path);
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     throw new ApiError(body?.message || `Erreur inattendue (${res.status}).`);

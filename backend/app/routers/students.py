@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.authz import get_active_academic_year_or_none, write_audit_log
 from app.db import get_db
 from app.deps import CurrentUser, require_role
+from app.file_storage import save_image_upload
 from app.models.academic import Term
 from app.models.people import Classroom, Student, Parent, StudentParent, Enrollment
 from app.models.school import School
@@ -49,8 +50,9 @@ def _serialize(db: Session, current_user: CurrentUser, student: Student) -> dict
         photo=student.photo,
         classroom_id=_current_classroom_id(db, current_user.school_id, student.id),
         statut=student.statut,
+        created_at=student.created_at,
     )
-    return out.model_dump()
+    return out.model_dump(mode="json")
 
 
 def _set_enrollment(db: Session, current_user: CurrentUser, student_id: str, classroom_id: str | None) -> None:
@@ -213,6 +215,21 @@ def create_student(
     db.commit()
     db.refresh(student)
     return envelope(_serialize(db, current_user, student), "Élève créé.")
+
+
+@router.post("/{student_id}/photo")
+async def upload_student_photo(
+    student_id: str,
+    file: UploadFile,
+    current_user: CurrentUser = Depends(require_role(*WRITE_ROLES)),
+    db: Session = Depends(get_db),
+):
+    student = _get_scoped(db, current_user, student_id)
+    student.photo = await save_image_upload(file, "photos")
+    write_audit_log(db, current_user, "UPDATE_STUDENT_PHOTO", "student", student.id)
+    db.commit()
+    db.refresh(student)
+    return envelope(_serialize(db, current_user, student), "Photo mise à jour.")
 
 
 @router.patch("/{student_id}")

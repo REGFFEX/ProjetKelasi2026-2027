@@ -5,6 +5,7 @@ import { School, Users, Calendar, Save, Upload, Shield, UserCog, Calculator, Boo
 import {
   fetchMySchool,
   updateMySchool,
+  uploadSchoolLogo,
   fetchUsers,
   createUser,
   updateUser,
@@ -24,7 +25,7 @@ import {
   fetchAuditLogs,
   type DbAuditLogEntry,
 } from '@/lib/api';
-import { ApiError } from '@/lib/api-client';
+import { ApiError, assetUrl } from '@/lib/api-client';
 import { roleLabels } from '@/lib/navigation';
 import type { Role } from '@/lib/types';
 import { Card } from '@/components/ui/card';
@@ -109,6 +110,8 @@ export function SettingsContent() {
   const [savingSchool, setSavingSchool] = useState(false);
   const [schoolError, setSchoolError] = useState('');
   const [schoolSaved, setSchoolSaved] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [logoError, setLogoError] = useState('');
   const [users, setUsers] = useState<Awaited<ReturnType<typeof fetchUsers>>>([]);
   const [academicYears, setAcademicYears] = useState<Awaited<ReturnType<typeof fetchAcademicYears>>>([]);
   const [showYearDialog, setShowYearDialog] = useState(false);
@@ -218,6 +221,22 @@ export function SettingsContent() {
       setSchoolError(err instanceof ApiError ? err.message : 'Échec de l\'enregistrement.');
     } finally {
       setSavingSchool(false);
+    }
+  };
+
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadingLogo(true);
+    setLogoError('');
+    try {
+      const updated = await uploadSchoolLogo(file);
+      setSchool(updated);
+    } catch (err) {
+      setLogoError(err instanceof ApiError ? err.message : 'Échec du téléversement du logo.');
+    } finally {
+      setUploadingLogo(false);
     }
   };
 
@@ -441,14 +460,29 @@ export function SettingsContent() {
           <h3 className="font-semibold text-foreground mb-4">Informations de l'établissement</h3>
 
           <div className="flex items-center gap-4 mb-6">
-            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-primary text-primary-foreground font-bold text-3xl shrink-0">
-              {schoolForm.nom[0] ?? school.nom[0]}
-            </div>
+            {school.logo ? (
+              <img
+                src={assetUrl(school.logo)} alt="Logo de l'établissement"
+                className="h-20 w-20 rounded-2xl object-cover shrink-0 border border-border"
+              />
+            ) : (
+              <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-primary text-primary-foreground font-bold text-3xl shrink-0">
+                {schoolForm.nom[0] ?? school.nom[0]}
+              </div>
+            )}
             <div className="min-w-0">
-              <Button variant="outline" size="sm" disabled title="Bientôt disponible" className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform">
-                <Upload className="h-4 w-4" /> <span className="hidden sm:inline">Changer le logo</span>
-              </Button>
-              <p className="text-xs text-muted-foreground mt-1.5 truncate">JPG, PNG max 1MB</p>
+              <label>
+                <input type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={handleLogoChange} disabled={uploadingLogo} />
+                <span className={cn(
+                  'inline-flex items-center gap-1.5 rounded-xl border border-input px-3 py-1.5 text-sm font-medium cursor-pointer hover:bg-muted/50 transition-colors',
+                  uploadingLogo && 'opacity-60 pointer-events-none'
+                )}>
+                  {uploadingLogo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  <span className="hidden sm:inline">Changer le logo</span>
+                </span>
+              </label>
+              <p className="text-xs text-muted-foreground mt-1.5 truncate">JPG, PNG ou WebP, 2 Mo maximum</p>
+              {logoError && <p className="text-xs text-destructive mt-1">{logoError}</p>}
             </div>
           </div>
 

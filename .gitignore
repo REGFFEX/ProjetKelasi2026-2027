@@ -28,6 +28,9 @@ yarn-error.log*
 .env
 .env*.local
 .env.production
+
+# user-uploaded files (school logos, student photos)
+backend/uploads/
 !.env.production.example
 
 # vercel

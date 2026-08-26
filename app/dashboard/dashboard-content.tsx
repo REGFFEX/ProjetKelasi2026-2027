@@ -11,6 +11,13 @@ import { formatMoney, fetchStudents, fetchAttendance, fetchInvoices, fetchPaymen
 import { useAuth } from '@/lib/auth-context';
 import type { Role } from '@/lib/types';
 
+interface ActivityItem {
+  key: string;
+  icon: 'Wallet' | 'UserX' | 'GraduationCap';
+  text: string;
+  dateKey: string;
+}
+
 interface DashboardData {
   effectifTotal: number;
   presents: number;
@@ -24,6 +31,15 @@ interface DashboardData {
   recettesParMois: { mois: string; montant: number }[];
   presencesParClasse: { classe: string; present: number; absent: number; retard: number; justifie: number }[];
   repartitionEffectif: { niveau: string; effectif: number }[];
+  recentActivity: ActivityItem[];
+}
+
+function relativeDay(dateKey: string): string {
+  const today = new Date().toISOString().split('T')[0];
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  if (dateKey === today) return "Aujourd'hui";
+  if (dateKey === yesterday) return 'Hier';
+  return new Date(dateKey).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 }
 
 const PIE_COLORS = ['#0ea5e9', '#22c55e', '#f59e0b', '#ef4444'];
@@ -93,6 +109,48 @@ export function DashboardContent() {
         });
         const repartitionEffectif = Array.from(niveauMap.entries()).map(([niveau, effectif]) => ({ niveau, effectif }));
 
+        const nouveauxEleves = students.filter(s => {
+          const d = new Date(s.created_at);
+          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        }).length;
+
+        const studentName = (id: string) => {
+          const s = students.find(st => st.id === id);
+          return s ? `${s.prenom} ${s.nom}` : 'Élève';
+        };
+        const classroomName = (id: string | null) => classrooms.find(c => c.id === id)?.nom;
+
+        const recentPayments: ActivityItem[] = [...payments]
+          .sort((a, b) => b.date_paiement.localeCompare(a.date_paiement))
+          .slice(0, 3)
+          .map(p => ({ key: `pay-${p.id}`, icon: 'Wallet', text: `Paiement reçu — ${formatMoney(p.montant)}`, dateKey: p.date_paiement }));
+
+        const recentAbsences: ActivityItem[] = [...attendance]
+          .filter(a => a.statut === 'absent')
+          .sort((a, b) => b.date.localeCompare(a.date))
+          .slice(0, 3)
+          .map(a => {
+            const classe = classroomName(a.classroom_id);
+            return {
+              key: `abs-${a.id}`, icon: 'UserX',
+              text: `Absence signalée — ${studentName(a.student_id)}${classe ? ` (${classe})` : ''}`,
+              dateKey: a.date,
+            };
+          });
+
+        const recentEnrollments: ActivityItem[] = [...students]
+          .sort((a, b) => b.created_at.localeCompare(a.created_at))
+          .slice(0, 3)
+          .map(s => ({
+            key: `enr-${s.id}`, icon: 'GraduationCap',
+            text: `Nouvel élève inscrit — ${s.prenom} ${s.nom}`,
+            dateKey: s.created_at.split('T')[0],
+          }));
+
+        const recentActivity = [...recentPayments, ...recentAbsences, ...recentEnrollments]
+          .sort((a, b) => b.dateKey.localeCompare(a.dateKey))
+          .slice(0, 6);
+
         setData({
           effectifTotal: students.length,
           presents,
@@ -101,11 +159,12 @@ export function DashboardContent() {
           justifies,
           paiementsDuJour,
           impayesTotal,
-          nouveauxEleves: 8,
+          nouveauxEleves,
           recettesMensuelles,
           recettesParMois,
           presencesParClasse,
           repartitionEffectif,
+          recentActivity,
         });
       } catch (err) {
         console.error('Dashboard load error:', err);
@@ -324,22 +383,24 @@ export function DashboardContent() {
         <Card className="p-4 sm:p-5 shadow-card lg:col-span-2">
           <h3 className="font-semibold text-foreground text-sm sm:text-base mb-4">Activité récente</h3>
           <div className="space-y-1.5 max-h-[280px] overflow-y-auto scrollbar-thin">
-            {[
-              { icon: 'Wallet', text: 'Paiement reçu — Aimé Mukendi (250.000 FC)', time: 'Il y a 2h', color: 'text-success', bg: 'bg-success/10' },
-              { icon: 'UserX', text: 'Absence signalée — Béatrice Kabongo (5ème A)', time: 'Il y a 3h', color: 'text-destructive', bg: 'bg-destructive/10' },
-              { icon: 'GraduationCap', text: 'Nouvel élève inscrit — Christian Mwamba (6ème A)', time: 'Hier', color: 'text-info', bg: 'bg-info/10' },
-              { icon: 'MessageSquare', text: 'Annonce publiée — Réunion parents-professeurs', time: 'Hier', color: 'text-warning', bg: 'bg-warning/10' },
-              { icon: 'ClipboardList', text: 'Notes publiées — Devoir 1 Mathématiques (6ème A)', time: 'Il y a 2 jours', color: 'text-primary', bg: 'bg-primary/10' },
-            ].map((a, i) => {
-              const Icon = { Wallet, UserX, GraduationCap, MessageSquare, ClipboardList }[a.icon] || Wallet;
+            {data.recentActivity.length === 0 && (
+              <p className="text-sm text-muted-foreground py-4 text-center">Aucune activité récente.</p>
+            )}
+            {data.recentActivity.map(a => {
+              const style = {
+                Wallet: { color: 'text-success', bg: 'bg-success/10' },
+                UserX: { color: 'text-destructive', bg: 'bg-destructive/10' },
+                GraduationCap: { color: 'text-info', bg: 'bg-info/10' },
+              }[a.icon];
+              const Icon = { Wallet, UserX, GraduationCap }[a.icon];
               return (
-                <div key={i} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-muted/50 transition-colors">
-                  <div className={cn('flex h-9 w-9 items-center justify-center rounded-xl shrink-0', a.bg)}>
-                    <Icon className={cn('h-4 w-4', a.color)} />
+                <div key={a.key} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-muted/50 transition-colors">
+                  <div className={cn('flex h-9 w-9 items-center justify-center rounded-xl shrink-0', style.bg)}>
+                    <Icon className={cn('h-4 w-4', style.color)} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-foreground truncate">{a.text}</p>
-                    <p className="text-xs text-muted-foreground">{a.time}</p>
+                    <p className="text-xs text-muted-foreground">{relativeDay(a.dateKey)}</p>
                   </div>
                 </div>
               );

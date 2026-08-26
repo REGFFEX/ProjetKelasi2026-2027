@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel
 
@@ -33,6 +33,7 @@ class StudentOut(BaseModel):
     photo: str | None = None
     classroom_id: str | None = None
     statut: UserStatus
+    created_at: datetime
 
     model_config = {"from_attributes": True}
 

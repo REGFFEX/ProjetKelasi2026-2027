@@ -50,6 +50,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loadProfile();
   }, [loadProfile]);
 
+  // A 401 from any authenticated call (session/cookie rejected, or the account was
+  // deactivated mid-session) forces an immediate, visible logout instead of leaving
+  // the UI stuck on stale data with dead buttons.
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setProfile(prev => {
+        if (prev) {
+          try { sessionStorage.setItem('kelasi_session_expired', '1'); } catch { /* ignore */ }
+        }
+        return null;
+      });
+    };
+    window.addEventListener('kelasi:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('kelasi:unauthorized', handleUnauthorized);
+  }, []);
+
   const signIn = useCallback(async (email: string, password: string) => {
     try {
       const data = await apiPost<UserProfile>('/auth/login', { email, password });

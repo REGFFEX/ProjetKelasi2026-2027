@@ -37,6 +37,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   // Redirect to the right home page based on the authenticated role
   useEffect(() => {
@@ -44,6 +45,15 @@ export default function LoginPage() {
       router.replace(getDefaultRouteForRole(profile.role));
     }
   }, [profile, router]);
+
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('kelasi_session_expired')) {
+        setSessionExpired(true);
+        sessionStorage.removeItem('kelasi_session_expired');
+      }
+    } catch { /* ignore */ }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,6 +162,12 @@ export default function LoginPage() {
                 Connectez-vous avec votre compte et vous serez orienté vers votre tableau de bord selon votre profil.
               </p>
             </div>
+
+            {sessionExpired && (
+              <div className="mt-5 flex items-center gap-2 rounded-[12px] bg-warning/10 px-3 py-2.5 text-sm text-warning animate-fade-in">
+                <AlertTriangle className="h-4 w-4 shrink-0" /> Votre session a expiré. Veuillez vous reconnecter.
+              </div>
+            )}
 
             <form onSubmit={handleLogin} className="mt-7 space-y-4">
               <div>

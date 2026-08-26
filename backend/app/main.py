@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
+from app.file_storage import UPLOADS_DIR, PUBLIC_PREFIX
 from app.response import register_exception_handlers
 from app.routers import (
     auth,
@@ -30,6 +32,8 @@ from app.routers import (
 
 app = FastAPI(title="Kelasi API")
 
+API_PREFIX = "/api/v1"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.CORS_ORIGIN],
@@ -38,9 +42,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def no_store_api_responses(request, call_next):
+    """Every response carries the caller's current permissions (role, statut, school
+    scope) baked in. A cached copy served after a role change or deactivation would look
+    exactly like continued access, so nothing under /api is ever cacheable."""
+    response = await call_next(request)
+    if request.url.path.startswith(API_PREFIX):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 register_exception_handlers(app)
 
-API_PREFIX = "/api/v1"
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+app.mount(f"{API_PREFIX}/{PUBLIC_PREFIX}", StaticFiles(directory=UPLOADS_DIR), name="uploads")
+
 app.include_router(auth.router, prefix=API_PREFIX)
 app.include_router(students.router, prefix=API_PREFIX)
 app.include_router(parents.router, prefix=API_PREFIX)
