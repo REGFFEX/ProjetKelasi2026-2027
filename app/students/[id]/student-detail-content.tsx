@@ -24,6 +24,8 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/lib/auth-context';
+import { canWrite } from '@/lib/permissions';
 
 const attendanceColors: Record<string, string> = {
   present: 'bg-success/10 text-success',
@@ -40,6 +42,8 @@ const attendanceLabels: Record<string, string> = {
 };
 
 export function StudentDetailContent({ studentId }: { studentId: string }) {
+  const { profile } = useAuth();
+  const canManage = canWrite(profile?.role, 'students');
   const [loading, setLoading] = useState(true);
   const [student, setStudent] = useState<Awaited<ReturnType<typeof fetchStudentById>> | null>(null);
   const [parents, setParents] = useState<Awaited<ReturnType<typeof fetchStudentParents>>>([]);
@@ -200,11 +204,13 @@ export function StudentDetailContent({ studentId }: { studentId: string }) {
               </span>
             </div>
           </div>
-          <Link href={`/students/${student.id}/edit`} className="shrink-0">
-            <Button variant="outline" size="sm" className="gap-1.5 rounded-xl">
-              <Pencil className="h-4 w-4" /> <span className="hidden sm:inline">Modifier</span>
-            </Button>
-          </Link>
+          {canManage && (
+            <Link href={`/students/${student.id}/edit`} className="shrink-0">
+              <Button variant="outline" size="sm" className="gap-1.5 rounded-xl">
+                <Pencil className="h-4 w-4" /> <span className="hidden sm:inline">Modifier</span>
+              </Button>
+            </Link>
+          )}
         </div>
 
         {/* Quick stats */}

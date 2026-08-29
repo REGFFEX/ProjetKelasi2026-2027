@@ -30,6 +30,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/lib/auth-context';
+import { canWrite } from '@/lib/permissions';
 
 type Tab = 'classes' | 'subjects';
 
@@ -37,6 +39,9 @@ const emptyClassForm = { level_id: '', nom: '', salle: '', filiere: '', enseigna
 const emptySubjectForm = { nom: '', coefficient: 1 };
 
 export function ClassesContent() {
+  const { profile } = useAuth();
+  const canManageClasses = canWrite(profile?.role, 'classrooms');
+  const canManageSubjects = canWrite(profile?.role, 'subjects');
   const [tab, setTab] = useState<Tab>('classes');
   const [loading, setLoading] = useState(true);
   const [classrooms, setClassrooms] = useState<Awaited<ReturnType<typeof fetchClassrooms>>>([]);
@@ -208,9 +213,11 @@ export function ClassesContent() {
           <h1 className="text-xl sm:text-2xl font-bold text-foreground">Classes & Matières</h1>
           <p className="text-muted-foreground mt-1">Gérez les classes, salles et matières de l'établissement</p>
         </div>
-        <Button onClick={openCreateDialog} className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform">
-          <Plus className="h-4 w-4" /> <span className="hidden sm:inline">{tab === 'classes' ? 'Nouvelle classe' : 'Nouvelle matière'}</span>
-        </Button>
+        {(tab === 'classes' ? canManageClasses : canManageSubjects) && (
+          <Button onClick={openCreateDialog} className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform">
+            <Plus className="h-4 w-4" /> <span className="hidden sm:inline">{tab === 'classes' ? 'Nouvelle classe' : 'Nouvelle matière'}</span>
+          </Button>
+        )}
       </div>
 
       <Dialog open={showClassDialog} onOpenChange={setShowClassDialog}>
@@ -325,14 +332,16 @@ export function ClassesContent() {
                   <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary/15 to-info/10">
                     <School className="h-6 w-6 text-primary" />
                   </div>
-                  <div className="flex gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => openEditClass(c)} className="h-8 w-8 p-0 rounded-xl active:scale-95 transition-transform">
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleDeleteClass(c.id)} className="h-8 w-8 p-0 rounded-xl text-destructive active:scale-95 transition-transform">
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  {canManageClasses && (
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => openEditClass(c)} className="h-8 w-8 p-0 rounded-xl active:scale-95 transition-transform">
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteClass(c.id)} className="h-8 w-8 p-0 rounded-xl text-destructive active:scale-95 transition-transform">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
                 <h3 className="font-semibold text-foreground truncate">{c.nom}</h3>
@@ -368,7 +377,9 @@ export function ClassesContent() {
                 <tr className="border-b border-border bg-muted/30">
                   <th className="text-left text-xs font-semibold text-muted-foreground uppercase px-4 py-3">Matière</th>
                   <th className="text-center text-xs font-semibold text-muted-foreground uppercase px-4 py-3">Coefficient</th>
-                  <th className="text-right text-xs font-semibold text-muted-foreground uppercase px-4 py-3">Actions</th>
+                  {canManageSubjects && (
+                    <th className="text-right text-xs font-semibold text-muted-foreground uppercase px-4 py-3">Actions</th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -385,16 +396,18 @@ export function ClassesContent() {
                     <td className="px-4 py-3 text-center">
                       <Badge variant="secondary" className="badge-modern">Coef. {s.coefficient}</Badge>
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => openEditSubject(s)} className="h-8 w-8 p-0 rounded-xl active:scale-95 transition-transform">
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteSubject(s.id)} className="h-8 w-8 p-0 rounded-xl text-destructive active:scale-95 transition-transform">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </td>
+                    {canManageSubjects && (
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => openEditSubject(s)} className="h-8 w-8 p-0 rounded-xl active:scale-95 transition-transform">
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDeleteSubject(s.id)} className="h-8 w-8 p-0 rounded-xl text-destructive active:scale-95 transition-transform">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

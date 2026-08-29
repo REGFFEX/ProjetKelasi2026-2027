@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/lib/auth-context';
+import { canWrite } from '@/lib/permissions';
 
 const statusConfig = {
   paye: { label: 'Payé', color: 'text-success', bg: 'bg-success/10', dot: 'bg-success' },
@@ -32,6 +34,8 @@ const methodLabels: Record<PaymentMethod, string> = {
 type View = 'list' | 'payment' | 'receipt';
 
 export function PaymentsContent() {
+  const { profile } = useAuth();
+  const canManage = canWrite(profile?.role, 'payments');
   const [view, setView] = useState<View>('list');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -115,9 +119,11 @@ export function PaymentsContent() {
             <h1 className="text-xl sm:text-2xl font-bold text-foreground">Paiements</h1>
             <p className="text-sm text-muted-foreground mt-0.5">Gérez les factures, paiements et reçus</p>
           </div>
-          <Button className="gap-1.5 rounded-xl active:scale-[0.97] shrink-0">
-            <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nouvelle facture</span>
-          </Button>
+          {canManage && (
+            <Button className="gap-1.5 rounded-xl active:scale-[0.97] shrink-0">
+              <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nouvelle facture</span>
+            </Button>
+          )}
         </div>
 
         {/* Summary cards */}
@@ -225,9 +231,11 @@ export function PaymentsContent() {
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
                         {inv.reste_a_payer > 0 ? (
-                          <Button size="sm" variant="outline" className="gap-1.5 rounded-xl active:scale-[0.97]" onClick={() => handlePayment(inv)}>
-                            <Wallet className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Payer</span>
-                          </Button>
+                          canManage && (
+                            <Button size="sm" variant="outline" className="gap-1.5 rounded-xl active:scale-[0.97]" onClick={() => handlePayment(inv)}>
+                              <Wallet className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Payer</span>
+                            </Button>
+                          )
                         ) : (
                           <Button
                             size="sm" variant="ghost" className="gap-1.5 rounded-xl active:scale-[0.97]"
@@ -286,7 +294,7 @@ export function PaymentsContent() {
                         <p className="text-sm font-medium text-destructive truncate">{formatMoney(inv.reste_a_payer)}</p>
                       </div>
                     </div>
-                    {inv.reste_a_payer > 0 && (
+                    {inv.reste_a_payer > 0 && canManage && (
                       <Button size="sm" className="w-full mt-3 gap-1.5 rounded-xl active:scale-[0.97]" onClick={() => handlePayment(inv)}>
                         <Wallet className="h-3.5 w-3.5" /> Enregistrer un paiement
                       </Button>

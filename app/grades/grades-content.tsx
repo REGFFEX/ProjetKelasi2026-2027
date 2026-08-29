@@ -30,6 +30,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/lib/auth-context';
+import { canWrite } from '@/lib/permissions';
 
 const statusConfig: Record<GradeStatus, { label: string; icon: typeof CheckCircle; color: string; bg: string; dot: string }> = {
   brouillon: { label: 'Brouillon', icon: Clock, color: 'text-muted-foreground', bg: 'bg-muted', dot: 'bg-muted-foreground' },
@@ -40,6 +42,8 @@ const statusConfig: Record<GradeStatus, { label: string; icon: typeof CheckCircl
 type View = 'list' | 'entry' | 'bulletin';
 
 export function GradesContent() {
+  const { profile } = useAuth();
+  const canManage = canWrite(profile?.role, 'grades');
   const [view, setView] = useState<View>('list');
   const [selectedAssessment, setSelectedAssessment] = useState<string | null>(null);
   const [selectedClassroom, setSelectedClassroom] = useState<string>('all');
@@ -186,9 +190,11 @@ export function GradesContent() {
             <h1 className="text-xl sm:text-2xl font-bold text-foreground">Notes & Évaluations</h1>
             <p className="text-sm text-muted-foreground mt-0.5 hidden sm:block">Gérez les évaluations, la saisie et la publication des notes</p>
           </div>
-          <Button onClick={openCreateAssessment} className="gap-1.5 rounded-xl shrink-0 active:scale-95 transition-all">
-            <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nouvelle évaluation</span><span className="sm:hidden">Évaluation</span>
-          </Button>
+          {canManage && (
+            <Button onClick={openCreateAssessment} className="gap-1.5 rounded-xl shrink-0 active:scale-95 transition-all">
+              <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nouvelle évaluation</span><span className="sm:hidden">Évaluation</span>
+            </Button>
+          )}
         </div>
 
         <Dialog open={showCreateAssessment} onOpenChange={setShowCreateAssessment}>
@@ -323,9 +329,11 @@ export function GradesContent() {
                     <p className="text-lg font-bold text-foreground">{avg}<span className="text-sm text-muted-foreground">/20</span></p>
                   </div>
                   <div className="flex gap-1">
-                    <Button variant="outline" size="sm" className="gap-1.5 rounded-xl active:scale-95 transition-all" onClick={() => handleEnterGrades(a.id)}>
-                      <FileText className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Saisir</span>
-                    </Button>
+                    {canManage && (
+                      <Button variant="outline" size="sm" className="gap-1.5 rounded-xl active:scale-95 transition-all" onClick={() => handleEnterGrades(a.id)}>
+                        <FileText className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Saisir</span>
+                      </Button>
+                    )}
                     <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-lg active:scale-95 transition-all">
                       <Eye className="h-4 w-4" />
                     </Button>

@@ -15,10 +15,14 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { useAuth } from '@/lib/auth-context';
+import { canWrite } from '@/lib/permissions';
 
 const emptyParentForm = { nom: '', telephone: '', email: '', adresse: '', profession: '' };
 
 export function ParentsContent() {
+  const { profile } = useAuth();
+  const canManage = canWrite(profile?.role, 'parents');
   const [loading, setLoading] = useState(true);
   const [parents, setParents] = useState<Awaited<ReturnType<typeof fetchParents>>>([]);
   const [students, setStudents] = useState<Awaited<ReturnType<typeof fetchStudents>>>([]);
@@ -100,9 +104,11 @@ export function ParentsContent() {
           <h1 className="text-xl sm:text-2xl font-bold text-foreground">Parents</h1>
           <p className="text-muted-foreground mt-1">{parents.length} parent(s) enregistré(s)</p>
         </div>
-        <Button onClick={() => setShowCreate(true)} className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform">
-          <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nouveau parent</span>
-        </Button>
+        {canManage && (
+          <Button onClick={() => setShowCreate(true)} className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform">
+            <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nouveau parent</span>
+          </Button>
+        )}
       </div>
 
       <Dialog open={showCreate} onOpenChange={setShowCreate}>

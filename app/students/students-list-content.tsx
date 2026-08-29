@@ -19,6 +19,8 @@ import {
   type StudentImportResult,
 } from '@/lib/api';
 import { ApiError } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth-context';
+import { canWrite } from '@/lib/permissions';
 
 interface StudentRow {
   id: string;
@@ -46,6 +48,8 @@ interface StudentParentRow {
 }
 
 export function StudentsListContent() {
+  const { profile } = useAuth();
+  const canManage = canWrite(profile?.role, 'students');
   const [search, setSearch] = useState('');
   const [classFilter, setClassFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -162,17 +166,21 @@ export function StudentsListContent() {
           <p className="text-sm text-muted-foreground mt-0.5">{filtered.length} élève(s) — {students.length} au total</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Button variant="outline" size="sm" onClick={openImport} className="gap-1.5 rounded-xl">
-            <Upload className="h-4 w-4" /> <span className="hidden sm:inline">Importer</span>
-          </Button>
+          {canManage && (
+            <Button variant="outline" size="sm" onClick={openImport} className="gap-1.5 rounded-xl">
+              <Upload className="h-4 w-4" /> <span className="hidden sm:inline">Importer</span>
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={handleExport} disabled={exporting} className="gap-1.5 rounded-xl">
             {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} <span className="hidden sm:inline">Exporter</span>
           </Button>
-          <Link href="/students/new">
-            <Button size="sm" className="gap-1.5 rounded-xl">
-              <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nouvel élève</span>
-            </Button>
-          </Link>
+          {canManage && (
+            <Link href="/students/new">
+              <Button size="sm" className="gap-1.5 rounded-xl">
+                <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nouvel élève</span>
+              </Button>
+            </Link>
+          )}
         </div>
       </div>
 
@@ -273,14 +281,18 @@ export function StudentsListContent() {
                             <Eye className="h-4 w-4" />
                           </Button>
                         </Link>
-                        <Link href={`/students/${s.id}/edit`}>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-lg">
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        </Link>
-                        <Button variant="ghost" size="sm" onClick={() => handleDelete(s.id)} className="h-8 w-8 p-0 rounded-lg text-destructive hover:text-destructive">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {canManage && (
+                          <>
+                            <Link href={`/students/${s.id}/edit`}>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-lg">
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            </Link>
+                            <Button variant="ghost" size="sm" onClick={() => handleDelete(s.id)} className="h-8 w-8 p-0 rounded-lg text-destructive hover:text-destructive">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>

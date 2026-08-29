@@ -16,10 +16,14 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/lib/auth-context';
+import { canWrite } from '@/lib/permissions';
 
 const emptyTeacherForm = { nom: '', prenom: '', email: '', telephone: '', assignments: [] as AssignmentPairInput[] };
 
 export function TeachersContent() {
+  const { profile } = useAuth();
+  const canManage = canWrite(profile?.role, 'teachers');
   const [loading, setLoading] = useState(true);
   const [teachers, setTeachers] = useState<Awaited<ReturnType<typeof fetchTeachers>>>([]);
   const [subjects, setSubjects] = useState<Awaited<ReturnType<typeof fetchSubjects>>>([]);
@@ -103,9 +107,11 @@ export function TeachersContent() {
           <h1 className="text-xl sm:text-2xl font-bold text-foreground">Enseignants</h1>
           <p className="text-muted-foreground mt-1">{teachers.length} enseignant(s) — {teachers.filter(t => t.statut === 'actif').length} actifs</p>
         </div>
-        <Button onClick={() => setShowCreate(true)} className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform">
-          <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nouvel enseignant</span>
-        </Button>
+        {canManage && (
+          <Button onClick={() => setShowCreate(true)} className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform">
+            <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nouvel enseignant</span>
+          </Button>
+        )}
       </div>
 
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
