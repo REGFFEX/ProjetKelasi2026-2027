@@ -1,16 +1,20 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { BarChart3, Download, Wallet, CheckSquare, ClipboardList, TrendingUp, TrendingDown, Users, FileText, Clock, Loader2 } from 'lucide-react';
+import { BarChart3, Download, Wallet, CheckSquare, ClipboardList, TrendingUp, TrendingDown, Users, FileText, Clock, Loader2, Award } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart, Pie, Cell } from 'recharts';
-import { fetchInvoices, fetchPayments, fetchAttendance, fetchGrades, fetchAssessments, fetchStudents, fetchClassrooms, formatMoney, downloadReportPdf } from '@/lib/api';
+import {
+  fetchInvoices, fetchPayments, fetchAttendance, fetchGrades, fetchAssessments, fetchStudents, fetchClassrooms,
+  fetchTerms, fetchDeliberation, formatMoney, downloadReportPdf, type DeliberationReport,
+} from '@/lib/api';
 import { ApiError } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth-context';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
-type ReportType = 'financial' | 'attendance' | 'grades';
+type ReportType = 'financial' | 'attendance' | 'grades' | 'deliberation';
 
 const reportTypes = [
   { id: 'financial' as ReportType, label: 'Rapport Financier', icon: Wallet, color: 'text-success', bg: 'bg-success/10' },
@@ -18,9 +22,17 @@ const reportTypes = [
   { id: 'grades' as ReportType, label: 'Rapport de Notes', icon: ClipboardList, color: 'text-primary', bg: 'bg-primary/10' },
 ];
 
+const decisionConfig = {
+  admis: { label: 'Admis', color: 'text-success', bg: 'bg-success/10' },
+  echoue: { label: 'Échoué', color: 'text-destructive', bg: 'bg-destructive/10' },
+  absent: { label: 'Absent', color: 'text-muted-foreground', bg: 'bg-muted' },
+};
+
 const PIE_COLORS = ['#22c55e', '#ef4444', '#f59e0b', '#64748b'];
 
 export function ReportsContent() {
+  const { profile } = useAuth();
+  const canSeeDeliberation = profile?.role === 'school_admin' || profile?.role === 'secretary';
   const [activeReport, setActiveReport] = useState<ReportType>('financial');
   const [dateFrom, setDateFrom] = useState('2026-09-01');
   const [dateTo, setDateTo] = useState(new Date().toISOString().split('T')[0]);
@@ -33,13 +45,21 @@ export function ReportsContent() {
   const [assessments, setAssessments] = useState<Awaited<ReturnType<typeof fetchAssessments>>>([]);
   const [students, setStudents] = useState<Awaited<ReturnType<typeof fetchStudents>>>([]);
   const [classrooms, setClassrooms] = useState<Awaited<ReturnType<typeof fetchClassrooms>>>([]);
+  const [terms, setTerms] = useState<Awaited<ReturnType<typeof fetchTerms>>>([]);
   const [exporting, setExporting] = useState(false);
+
+  const [delibClassroomId, setDelibClassroomId] = useState('');
+  const [delibTermId, setDelibTermId] = useState('');
+  const [delibSeuil, setDelibSeuil] = useState(10);
+  const [delibLoading, setDelibLoading] = useState(false);
+  const [delibError, setDelibError] = useState('');
+  const [deliberation, setDeliberation] = useState<DeliberationReport | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [inv, pay, att, g, a, s, c] = await Promise.all([
+        const [inv, pay, att, g, a, s, c, t] = await Promise.all([
           fetchInvoices(),
           fetchPayments(),
           fetchAttendance(),
@@ -47,6 +67,7 @@ export function ReportsContent() {
           fetchAssessments(),
           fetchStudents(),
           fetchClassrooms(),
+          fetchTerms(),
         ]);
         if (cancelled) return;
         setInvoices(inv);
@@ -56,6 +77,8 @@ export function ReportsContent() {
         setAssessments(a);
         setStudents(s);
         setClassrooms(c);
+        setTerms(t);
+        if (c.length > 0) setDelibClassroomId(c[0].id);
       } catch (e) {
         console.error('Failed to load reports data:', e);
       } finally {
@@ -64,6 +87,18 @@ export function ReportsContent() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (activeReport !== 'deliberation' || !delibClassroomId) return;
+    let cancelled = false;
+    setDelibLoading(true);
+    setDelibError('');
+    fetchDeliberation(delibClassroomId, delibTermId || undefined, delibSeuil)
+      .then(data => { if (!cancelled) setDeliberation(data); })
+      .catch(e => { if (!cancelled) setDelibError(e instanceof ApiError ? e.message : 'Échec du chargement.'); })
+      .finally(() => { if (!cancelled) setDelibLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeReport, delibClassroomId, delibTermId, delibSeuil]);
 
   // Date range filter — applied once here, then every computation below uses the filtered arrays.
   const invoicesInRange = useMemo(
@@ -86,6 +121,7 @@ export function ReportsContent() {
   }, [grades, assessments, dateFrom, dateTo]);
 
   const handleExportPdf = async () => {
+    if (activeReport === 'deliberation') return;
     setExporting(true);
     try {
       await downloadReportPdf(activeReport, dateFrom, dateTo);
@@ -165,13 +201,15 @@ export function ReportsContent() {
           <h1 className="text-xl sm:text-2xl font-bold text-foreground">Rapports</h1>
           <p className="text-muted-foreground mt-1 truncate">Rapports financiers, de présence et de notes</p>
         </div>
-        <Button variant="outline" onClick={handleExportPdf} disabled={exporting} className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform">
-          {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} <span className="hidden sm:inline">Exporter PDF</span>
-        </Button>
+        {activeReport !== 'deliberation' && (
+          <Button variant="outline" onClick={handleExportPdf} disabled={exporting} className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform">
+            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} <span className="hidden sm:inline">Exporter PDF</span>
+          </Button>
+        )}
       </div>
 
       {/* Report type selector */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+      <div className={cn('grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4', canSeeDeliberation && 'lg:grid-cols-4')}>
         {reportTypes.map(rt => {
           const Icon = rt.icon;
           return (
@@ -194,9 +232,28 @@ export function ReportsContent() {
             </button>
           );
         })}
+        {canSeeDeliberation && (
+          <button
+            onClick={() => setActiveReport('deliberation')}
+            className={cn(
+              'flex items-center gap-3 rounded-2xl border p-4 text-left transition-all active:scale-[0.97]',
+              activeReport === 'deliberation'
+                ? 'border-primary bg-primary/5 ring-2 ring-primary/20 shadow-card'
+                : 'border-border hover:bg-muted/50 hover:shadow-card-hover'
+            )}
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-warning/10">
+              <Award className="h-5 w-5 text-warning" />
+            </div>
+            <span className={cn('text-sm font-medium truncate', activeReport === 'deliberation' ? 'text-primary' : 'text-foreground')}>
+              Délibération de classe
+            </span>
+          </button>
+        )}
       </div>
 
       {/* Date range filter */}
+      {activeReport !== 'deliberation' && (
       <Card className="p-4 sm:p-5 rounded-2xl shadow-card">
         <div className="flex flex-wrap items-end gap-3 sm:gap-4">
           <div>
@@ -220,6 +277,7 @@ export function ReportsContent() {
           <Button size="sm" className="rounded-xl active:scale-[0.97] transition-transform">Filtrer</Button>
         </div>
       </Card>
+      )}
 
       {/* FINANCIAL REPORT */}
       {activeReport === 'financial' && (
@@ -431,6 +489,117 @@ export function ReportsContent() {
               </ResponsiveContainer>
             </div>
           </Card>
+        </div>
+      )}
+
+      {/* DELIBERATION REPORT */}
+      {activeReport === 'deliberation' && canSeeDeliberation && (
+        <div className="space-y-4 sm:space-y-6">
+          <Card className="p-4 sm:p-5 rounded-2xl shadow-card">
+            <div className="flex flex-wrap items-end gap-3 sm:gap-4">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1.5 block">Classe</label>
+                <select
+                  value={delibClassroomId}
+                  onChange={e => setDelibClassroomId(e.target.value)}
+                  className="rounded-xl border border-input bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none transition-colors"
+                >
+                  {classrooms.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1.5 block">Période</label>
+                <select
+                  value={delibTermId}
+                  onChange={e => setDelibTermId(e.target.value)}
+                  className="rounded-xl border border-input bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none transition-colors"
+                >
+                  <option value="">Cumul de l'année</option>
+                  {terms.map(t => <option key={t.id} value={t.id}>{t.libelle}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1.5 block">Seuil d'admission</label>
+                <input
+                  type="number" min={0} max={20} step={0.5}
+                  value={delibSeuil}
+                  onChange={e => setDelibSeuil(parseFloat(e.target.value) || 10)}
+                  className="w-24 rounded-xl border border-input bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none transition-colors"
+                />
+              </div>
+            </div>
+          </Card>
+
+          {delibLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : delibError ? (
+            <Card className="p-6 rounded-2xl shadow-card text-center text-sm text-destructive">{delibError}</Card>
+          ) : deliberation ? (
+            <>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <Card className="p-4 sm:p-5 rounded-2xl shadow-card">
+                  <p className="text-xs text-muted-foreground truncate">Moyenne de classe</p>
+                  <p className="text-lg sm:text-xl font-bold text-foreground mt-1 truncate">
+                    {deliberation.moyenne_classe !== null ? `${deliberation.moyenne_classe}/20` : '—'}
+                  </p>
+                </Card>
+                <Card className="p-4 sm:p-5 rounded-2xl shadow-card">
+                  <p className="text-xs text-muted-foreground truncate">Admis</p>
+                  <p className="text-lg sm:text-xl font-bold text-success mt-1 truncate">{deliberation.nb_admis}</p>
+                </Card>
+                <Card className="p-4 sm:p-5 rounded-2xl shadow-card">
+                  <p className="text-xs text-muted-foreground truncate">Échoués</p>
+                  <p className="text-lg sm:text-xl font-bold text-destructive mt-1 truncate">{deliberation.nb_echoue}</p>
+                </Card>
+                <Card className="p-4 sm:p-5 rounded-2xl shadow-card">
+                  <p className="text-xs text-muted-foreground truncate">Absents (sans note)</p>
+                  <p className="text-lg sm:text-xl font-bold text-muted-foreground mt-1 truncate">{deliberation.nb_absent}</p>
+                </Card>
+              </div>
+
+              <Card className="overflow-hidden rounded-2xl shadow-card">
+                <div className="p-4 sm:p-5 border-b border-border">
+                  <h3 className="font-semibold text-foreground">{deliberation.classroom_nom} — Résultats</h3>
+                </div>
+                <div className="overflow-x-auto scrollbar-thin">
+                  <table className="w-full min-w-[560px]">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/30">
+                        <th className="text-center text-xs font-semibold text-muted-foreground uppercase px-4 py-3">Rang</th>
+                        <th className="text-left text-xs font-semibold text-muted-foreground uppercase px-4 py-3">Élève</th>
+                        <th className="text-left text-xs font-semibold text-muted-foreground uppercase px-4 py-3">Matricule</th>
+                        <th className="text-center text-xs font-semibold text-muted-foreground uppercase px-4 py-3">Moyenne</th>
+                        <th className="text-center text-xs font-semibold text-muted-foreground uppercase px-4 py-3">Décision</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {deliberation.resultats.map(r => {
+                        const cfg = decisionConfig[r.decision];
+                        return (
+                          <tr key={r.student_id} className="hover:bg-muted/30 transition-colors">
+                            <td className="px-4 py-3 text-center text-sm text-muted-foreground">{r.rang ?? '—'}</td>
+                            <td className="px-4 py-3 text-sm font-medium text-foreground truncate">{r.prenom} {r.nom}</td>
+                            <td className="px-4 py-3 text-sm text-muted-foreground font-mono">{r.matricule}</td>
+                            <td className="px-4 py-3 text-center text-sm font-bold text-foreground">{r.moyenne !== null ? `${r.moyenne}/20` : '—'}</td>
+                            <td className="px-4 py-3 text-center">
+                              <Badge className={cn('badge-modern', cfg.bg, cfg.color)}>{cfg.label}</Badge>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {deliberation.resultats.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-8 text-center text-sm text-muted-foreground">Aucun élève inscrit dans cette classe.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </>
+          ) : null}
         </div>
       )}
     </div>

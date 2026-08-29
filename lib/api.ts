@@ -621,6 +621,34 @@ export const downloadReportPdf = (type: 'financial' | 'attendance' | 'grades', d
   return downloadFile(`/reports/export.pdf?${qs.toString()}`, `rapport-${type}.pdf`);
 };
 
+export interface DeliberationRow {
+  student_id: string;
+  nom: string;
+  prenom: string;
+  matricule: string;
+  moyenne: number | null;
+  decision: 'admis' | 'echoue' | 'absent';
+  rang: number | null;
+}
+
+export interface DeliberationReport {
+  classroom_id: string;
+  classroom_nom: string;
+  term_id: string | null;
+  seuil: number;
+  resultats: DeliberationRow[];
+  nb_admis: number;
+  nb_echoue: number;
+  nb_absent: number;
+  moyenne_classe: number | null;
+}
+
+export const fetchDeliberation = (classroomId: string, termId?: string, seuil = 10) => {
+  const qs = new URLSearchParams({ classroom_id: classroomId, seuil: String(seuil) });
+  if (termId) qs.set('term_id', termId);
+  return apiGet<DeliberationReport>(`/reports/deliberation?${qs.toString()}`);
+};
+
 // ── Helpers ───────────────────────────────────────────────────
 
 export function formatMoney(amount: number): string {
