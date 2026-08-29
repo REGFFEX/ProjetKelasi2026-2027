@@ -18,6 +18,7 @@ export const navItemsByRole: Record<Role, NavItem[]> = {
     { label: 'Parents', href: '/parents', icon: 'Users' },
     { label: 'Enseignants', href: '/teachers', icon: 'UserCog' },
     { label: 'Classes', href: '/classes', icon: 'School' },
+    { label: 'Emploi du temps', href: '/timetable', icon: 'CalendarDays' },
     { label: 'Présences', href: '/attendance', icon: 'CheckSquare' },
     { label: 'Notes', href: '/grades', icon: 'ClipboardList' },
     { label: 'Paiements', href: '/payments', icon: 'Wallet' },
@@ -29,6 +30,7 @@ export const navItemsByRole: Record<Role, NavItem[]> = {
     { label: 'Élèves', href: '/students', icon: 'GraduationCap' },
     { label: 'Parents', href: '/parents', icon: 'Users' },
     { label: 'Classes', href: '/classes', icon: 'School' },
+    { label: 'Emploi du temps', href: '/timetable', icon: 'CalendarDays' },
     { label: 'Communication', href: '/communication', icon: 'MessageSquare' },
   ],
   accountant: [
@@ -39,6 +41,7 @@ export const navItemsByRole: Record<Role, NavItem[]> = {
   ],
   teacher: [
     { label: 'Mes classes', href: '/classes', icon: 'School' },
+    { label: 'Mes horaires', href: '/timetable', icon: 'CalendarDays' },
     { label: 'Présences', href: '/attendance', icon: 'CheckSquare' },
     { label: 'Notes', href: '/grades', icon: 'ClipboardList' },
     { label: 'Communication', href: '/communication', icon: 'MessageSquare' },

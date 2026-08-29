@@ -256,3 +256,33 @@ def test_teacher_reads_are_scoped_to_assigned_classrooms(client, db_session):
     assert {g["id"] for g in grades} == {
         g.id for g in db_session.query(Grade).filter(Grade.assessment_id == own.id).all()
     }
+
+
+def test_teacher_assignment_reads_are_scoped_to_own(client, db_session):
+    """A teacher listing /assignments should only see their own, not every teacher's."""
+    ctx = _setup(db_session)
+
+    other_user = User(
+        school_id=ctx["school"].id, nom="Autre Prof", email="autre.prof@test.cd",
+        password_hash=hash_password("password123"), telephone="", role=Role.teacher, statut=UserStatus.actif,
+    )
+    db_session.add(other_user)
+    db_session.flush()
+    other_teacher = Teacher(
+        school_id=ctx["school"].id, user_id=other_user.id, nom="Prof", prenom="Autre",
+        email="autre.prof@test.cd", telephone="",
+    )
+    db_session.add(other_teacher)
+    db_session.flush()
+    year = db_session.query(AcademicYear).filter_by(school_id=ctx["school"].id).first()
+    other_assignment = TeacherAssignment(
+        school_id=ctx["school"].id, teacher_id=other_teacher.id, subject_id=ctx["french"].id,
+        classroom_id=ctx["classroom_b"].id, academic_year_id=year.id,
+    )
+    db_session.add(other_assignment)
+    db_session.commit()
+
+    _login_teacher(client, ctx["school"].id)
+    assignments = client.get("/api/v1/assignments").json()["data"]
+    assert {a["subject_id"] for a in assignments} == {ctx["math"].id}
+    assert other_assignment.id not in {a["id"] for a in assignments}

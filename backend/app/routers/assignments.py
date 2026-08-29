@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.authz import get_active_academic_year, write_audit_log
+from app.authz import get_active_academic_year, get_teacher_row, write_audit_log
 from app.db import get_db
 from app.deps import CurrentUser, require_role
 from app.models.people import TeacherAssignment
@@ -22,7 +22,10 @@ def list_assignments(
     db: Session = Depends(get_db),
 ):
     query = db.query(TeacherAssignment).filter(TeacherAssignment.school_id == current_user.school_id)
-    if teacher_id:
+    if current_user.role == Role.teacher:
+        teacher = get_teacher_row(db, current_user)
+        query = query.filter(TeacherAssignment.teacher_id == teacher.id)
+    elif teacher_id:
         query = query.filter(TeacherAssignment.teacher_id == teacher_id)
     rows = query.all()
     return envelope([TeacherAssignmentOut.model_validate(r).model_dump() for r in rows])

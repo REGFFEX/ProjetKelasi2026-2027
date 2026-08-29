@@ -649,6 +649,29 @@ export const fetchDeliberation = (classroomId: string, termId?: string, seuil = 
   return apiGet<DeliberationReport>(`/reports/deliberation?${qs.toString()}`);
 };
 
+export type Weekday = 'lundi' | 'mardi' | 'mercredi' | 'jeudi' | 'vendredi' | 'samedi';
+
+export interface DbTimetableSlot {
+  id: string;
+  school_id: string;
+  assignment_id: string;
+  jour: Weekday;
+  heure_debut: string;
+  heure_fin: string;
+  salle: string | null;
+}
+
+export const fetchTimetable = (classroomId?: string) =>
+  apiGet<DbTimetableSlot[]>(`/timetable${classroomId ? `?classroom_id=${classroomId}` : ''}`);
+
+export const createTimetableSlot = (slot: { assignment_id: string; jour: Weekday; heure_debut: string; heure_fin: string; salle?: string | null }) =>
+  apiPost<DbTimetableSlot>('/timetable', slot);
+
+export const updateTimetableSlot = (id: string, slot: Partial<{ assignment_id: string; jour: Weekday; heure_debut: string; heure_fin: string; salle: string | null }>) =>
+  apiPatch<DbTimetableSlot>(`/timetable/${id}`, slot);
+
+export const deleteTimetableSlot = (id: string) => apiDelete<void>(`/timetable/${id}`);
+
 // ── Helpers ───────────────────────────────────────────────────
 
 export function formatMoney(amount: number): string {

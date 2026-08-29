@@ -1,7 +1,7 @@
 import enum
-from datetime import date
+from datetime import date, time
 
-from sqlalchemy import String, Text, Date, Integer, Numeric, ForeignKey, CHAR, UniqueConstraint
+from sqlalchemy import String, Text, Date, Time, Integer, Numeric, ForeignKey, CHAR, UniqueConstraint
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -50,6 +50,31 @@ class Assessment(Base, UUIDPKMixin, TimestampMixin):
     libelle: Mapped[str] = mapped_column(String(255))
     date: Mapped[date] = mapped_column(Date)
     coefficient: Mapped[int] = mapped_column(Integer, default=1)
+
+
+class Weekday(str, enum.Enum):
+    lundi = "lundi"
+    mardi = "mardi"
+    mercredi = "mercredi"
+    jeudi = "jeudi"
+    vendredi = "vendredi"
+    samedi = "samedi"
+
+
+class TimetableSlot(Base, UUIDPKMixin, TimestampMixin):
+    """A weekly recurring class slot, tied to an existing teacher×subject×classroom
+    assignment rather than duplicating those references — one row per (day, time range)."""
+
+    __tablename__ = "timetable_slots"
+
+    school_id: Mapped[str] = mapped_column(CHAR(36), ForeignKey("schools.id", ondelete="CASCADE"), index=True)
+    assignment_id: Mapped[str] = mapped_column(
+        CHAR(36), ForeignKey("teacher_assignments.id", ondelete="CASCADE"), index=True
+    )
+    jour: Mapped[Weekday] = mapped_column(SAEnum(Weekday), index=True)
+    heure_debut: Mapped[time] = mapped_column(Time)
+    heure_fin: Mapped[time] = mapped_column(Time)
+    salle: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
 
 class GradeStatus(str, enum.Enum):
