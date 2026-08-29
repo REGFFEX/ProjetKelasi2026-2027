@@ -16,28 +16,36 @@ const roleAccess: Record<Role, string[]> = {
   parent: ['/parent', '/communication'],
 };
 
+function isAllowedPath(role: Role, currentPath: string): boolean {
+  const allowed = roleAccess[role] ?? [];
+  return allowed.some(p => currentPath === p || currentPath.startsWith(p + '/') || currentPath.startsWith(p));
+}
+
 export function RouteGuard({ children }: { children: ReactNode }) {
   const { profile, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const currentPath = pathname ?? '/';
 
   useEffect(() => {
-    const currentPath = pathname ?? '/';
-
     if (loading) return;
     if (!profile) {
       router.replace('/');
       return;
     }
-    const allowed = roleAccess[profile.role] ?? [];
-    const isAllowed = allowed.some(p => currentPath === p || currentPath.startsWith(p + '/') || currentPath.startsWith(p));
     const home = getDefaultRouteForRole(profile.role);
-    if (!isAllowed && currentPath !== home) {
+    if (!isAllowedPath(profile.role, currentPath) && currentPath !== home) {
       router.replace(home);
     }
-  }, [profile, loading, pathname, router]);
+  }, [profile, loading, currentPath, router]);
 
-  if (loading || !profile) {
+  // A role landing on a route it isn't allowed to see (stale bookmark, typed URL,
+  // browser back button) must never get a render frame of that page's data before
+  // the effect above redirects it away — so the guard withholds children here too,
+  // not just in the effect.
+  const blocked = !loading && profile && !isAllowedPath(profile.role, currentPath) && currentPath !== getDefaultRouteForRole(profile.role);
+
+  if (loading || !profile || blocked) {
     return (
       <div className="flex items-center justify-center h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
