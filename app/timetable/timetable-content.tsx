@@ -235,9 +235,13 @@ export function TimetableContent() {
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-foreground">{canManage ? 'Emploi du temps' : 'Mes horaires'}</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">{isTeacher ? 'Mes horaires' : 'Emploi du temps'}</h1>
           <p className="text-muted-foreground mt-1">
-            {canManage ? "Gérez les créneaux hebdomadaires par classe et enseignant" : 'Vos créneaux de cours cette semaine'}
+            {canManage
+              ? "Gérez les créneaux hebdomadaires par classe et enseignant"
+              : isTeacher
+                ? 'Vos créneaux de cours cette semaine'
+                : "Consultez les créneaux de toutes les classes de l'établissement"}
           </p>
         </div>
         {canManage && (
@@ -251,7 +255,7 @@ export function TimetableContent() {
         <div className="rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive animate-fade-in">{sessionError}</div>
       )}
 
-      {canManage && (
+      {!isTeacher && (
         <div className="flex flex-wrap gap-3">
           <select
             value={classroomFilter}
