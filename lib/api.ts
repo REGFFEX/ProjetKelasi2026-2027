@@ -54,6 +54,7 @@ export interface DbCycle {
   nom: string;
   ordre: number;
   evaluation_mode: 'notes' | 'qualitatif';
+  paiement_horaire: boolean;
 }
 
 export interface DbLevel {
@@ -261,6 +262,7 @@ export interface CycleInput {
   nom: string;
   ordre?: number;
   evaluation_mode?: 'notes' | 'qualitatif';
+  paiement_horaire?: boolean;
 }
 
 export const fetchCycles = () => apiGet<DbCycle[]>('/cycles');
@@ -671,6 +673,63 @@ export const updateTimetableSlot = (id: string, slot: Partial<{ assignment_id: s
   apiPatch<DbTimetableSlot>(`/timetable/${id}`, slot);
 
 export const deleteTimetableSlot = (id: string) => apiDelete<void>(`/timetable/${id}`);
+
+export interface DbHourlyRate {
+  id: string;
+  school_id: string;
+  teacher_id: string;
+  academic_year_id: string;
+  taux: number;
+}
+
+export const fetchHourlyRates = () => apiGet<DbHourlyRate[]>('/teaching-sessions/rates');
+export const upsertHourlyRate = (teacherId: string, taux: number) =>
+  apiPost<DbHourlyRate>('/teaching-sessions/rates', { teacher_id: teacherId, taux });
+
+export type TeachingSessionStatus = 'en_cours' | 'termine';
+
+export interface DbTeachingSession {
+  id: string;
+  school_id: string;
+  timetable_slot_id: string;
+  date: string;
+  started_at: string;
+  ended_at: string | null;
+  duree_reelle: number | null;
+  statut: TeachingSessionStatus;
+}
+
+export const fetchTeachingSessions = () => apiGet<DbTeachingSession[]>('/teaching-sessions');
+export const startTeachingSession = (timetableSlotId: string) =>
+  apiPost<DbTeachingSession>('/teaching-sessions/start', { timetable_slot_id: timetableSlotId });
+export const endTeachingSession = (sessionId: string) =>
+  apiPost<DbTeachingSession>(`/teaching-sessions/${sessionId}/end`);
+
+export interface TeacherHoursReportRow {
+  teacher_id: string;
+  nom: string;
+  prenom: string;
+  nb_seances: number;
+  total_heures: number;
+  taux: number;
+  montant: number;
+}
+
+export interface TeacherHoursReport {
+  mois: number;
+  annee: number;
+  lignes: TeacherHoursReportRow[];
+  total_heures: number;
+  total_montant: number;
+}
+
+export const fetchHoursReport = (mois?: number, annee?: number) => {
+  const qs = new URLSearchParams();
+  if (mois) qs.set('mois', String(mois));
+  if (annee) qs.set('annee', String(annee));
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  return apiGet<TeacherHoursReport>(`/teaching-sessions/report${suffix}`);
+};
 
 // ── Helpers ───────────────────────────────────────────────────
 

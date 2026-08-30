@@ -1,13 +1,18 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { CalendarDays, Plus, Pencil, Trash2, Loader2, Clock, MapPin } from 'lucide-react';
+import { CalendarDays, Plus, Pencil, Trash2, Loader2, Clock, MapPin, Play, Square } from 'lucide-react';
 import {
   fetchTimetable,
   fetchAssignments,
   fetchClassrooms,
   fetchSubjects,
   fetchTeachers,
+  fetchCycles,
+  fetchLevels,
+  fetchTeachingSessions,
+  startTeachingSession,
+  endTeachingSession,
   createTimetableSlot,
   updateTimetableSlot,
   deleteTimetableSlot,
@@ -40,8 +45,14 @@ const DAYS: { id: Weekday; label: string }[] = [
 
 const emptyForm = { assignment_id: '', jour: 'lundi' as Weekday, heure_debut: '08:00', heure_fin: '09:00', salle: '' };
 
+const TODAY_WEEKDAY: Weekday | null = (() => {
+  const map: Record<number, Weekday> = { 1: 'lundi', 2: 'mardi', 3: 'mercredi', 4: 'jeudi', 5: 'vendredi', 6: 'samedi' };
+  return map[new Date().getDay()] ?? null;
+})();
+
 export function TimetableContent() {
   const { profile } = useAuth();
+  const isTeacher = profile?.role === 'teacher';
   const canManage = canWrite(profile?.role, 'timetable');
 
   const [loading, setLoading] = useState(true);
@@ -50,7 +61,12 @@ export function TimetableContent() {
   const [classrooms, setClassrooms] = useState<Awaited<ReturnType<typeof fetchClassrooms>>>([]);
   const [subjects, setSubjects] = useState<Awaited<ReturnType<typeof fetchSubjects>>>([]);
   const [teachers, setTeachers] = useState<Awaited<ReturnType<typeof fetchTeachers>>>([]);
+  const [cycles, setCycles] = useState<Awaited<ReturnType<typeof fetchCycles>>>([]);
+  const [levels, setLevels] = useState<Awaited<ReturnType<typeof fetchLevels>>>([]);
+  const [sessions, setSessions] = useState<Awaited<ReturnType<typeof fetchTeachingSessions>>>([]);
   const [classroomFilter, setClassroomFilter] = useState('all');
+  const [sessionActionFor, setSessionActionFor] = useState<string | null>(null);
+  const [sessionError, setSessionError] = useState('');
 
   const [showDialog, setShowDialog] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -60,18 +76,24 @@ export function TimetableContent() {
 
   const load = async () => {
     try {
-      const [s, a, c, sub, t] = await Promise.all([
+      const [s, a, c, sub, t, cyc, lvl, sess] = await Promise.all([
         fetchTimetable(),
         fetchAssignments(),
         fetchClassrooms(),
         fetchSubjects(),
         fetchTeachers(),
+        fetchCycles(),
+        fetchLevels(),
+        isTeacher ? fetchTeachingSessions() : Promise.resolve([]),
       ]);
       setSlots(s);
       setAssignments(a);
       setClassrooms(c);
       setSubjects(sub);
       setTeachers(t);
+      setCycles(cyc);
+      setLevels(lvl);
+      setSessions(sess);
     } catch (e) {
       console.error('Failed to load timetable data:', e);
     } finally {
@@ -89,21 +111,31 @@ export function TimetableContent() {
     return t ? `${t.prenom} ${t.nom}` : 'Inconnu';
   };
 
+  const isHourlyPaidClassroom = (classroomId: string | undefined) => {
+    const classroom = classrooms.find(c => c.id === classroomId);
+    const level = classroom ? levels.find(l => l.id === classroom.level_id) : undefined;
+    const cycle = level ? cycles.find(cy => cy.id === level.cycle_id) : undefined;
+    return Boolean(cycle?.paiement_horaire);
+  };
+
   const enrichedSlots = useMemo(() => {
     return slots
       .map(slot => {
         const assignment = getAssignment(slot.assignment_id);
+        const activeSession = sessions.find(s => s.timetable_slot_id === slot.id && s.statut === 'en_cours');
         return {
           ...slot,
           subjectName: assignment ? getSubjectName(assignment.subject_id) : 'Inconnu',
           classroomName: assignment ? getClassroomName(assignment.classroom_id) : 'Inconnu',
           teacherName: assignment ? getTeacherName(assignment.teacher_id) : 'Inconnu',
           classroomId: assignment?.classroom_id,
+          hourlyPaid: isHourlyPaidClassroom(assignment?.classroom_id),
+          activeSession,
         };
       })
       .filter(s => classroomFilter === 'all' || s.classroomId === classroomFilter)
       .sort((a, b) => a.heure_debut.localeCompare(b.heure_debut));
-  }, [slots, assignments, subjects, classrooms, teachers, classroomFilter]);
+  }, [slots, assignments, subjects, classrooms, levels, cycles, teachers, sessions, classroomFilter]);
 
   const slotsByDay = (day: Weekday) => enrichedSlots.filter(s => s.jour === day);
 
@@ -165,6 +197,32 @@ export function TimetableContent() {
     }
   };
 
+  const handleStartSession = async (slotId: string) => {
+    setSessionActionFor(slotId);
+    setSessionError('');
+    try {
+      const session = await startTeachingSession(slotId);
+      setSessions(prev => [...prev, session]);
+    } catch (err) {
+      setSessionError(err instanceof ApiError ? err.message : 'Échec du démarrage du cours.');
+    } finally {
+      setSessionActionFor(null);
+    }
+  };
+
+  const handleEndSession = async (sessionId: string, slotId: string) => {
+    setSessionActionFor(slotId);
+    setSessionError('');
+    try {
+      const updated = await endTeachingSession(sessionId);
+      setSessions(prev => prev.map(s => (s.id === updated.id ? updated : s)));
+    } catch (err) {
+      setSessionError(err instanceof ApiError ? err.message : 'Échec de la fin du cours.');
+    } finally {
+      setSessionActionFor(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -188,6 +246,10 @@ export function TimetableContent() {
           </Button>
         )}
       </div>
+
+      {sessionError && (
+        <div className="rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive animate-fade-in">{sessionError}</div>
+      )}
 
       {canManage && (
         <div className="flex flex-wrap gap-3">
@@ -297,6 +359,29 @@ export function TimetableContent() {
                         <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {slot.heure_debut.slice(0, 5)}–{slot.heure_fin.slice(0, 5)}</span>
                         {slot.salle && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {slot.salle}</span>}
                       </div>
+                      {isTeacher && slot.hourlyPaid && (slot.activeSession || slot.jour === TODAY_WEEKDAY) && (
+                        <div className="mt-2.5 pt-2.5 border-t border-border">
+                          {slot.activeSession ? (
+                            <Button
+                              size="sm" variant="outline" className="w-full gap-1.5 rounded-xl text-destructive border-destructive/30 hover:bg-destructive/5"
+                              disabled={sessionActionFor === slot.id}
+                              onClick={() => handleEndSession(slot.activeSession!.id, slot.id)}
+                            >
+                              {sessionActionFor === slot.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3.5 w-3.5" />}
+                              Terminer le cours
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm" className="w-full gap-1.5 rounded-xl"
+                              disabled={sessionActionFor === slot.id}
+                              onClick={() => handleStartSession(slot.id)}
+                            >
+                              {sessionActionFor === slot.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                              Démarrer le cours
+                            </Button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

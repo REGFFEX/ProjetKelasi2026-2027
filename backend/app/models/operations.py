@@ -1,7 +1,7 @@
 import enum
-from datetime import date, time
+from datetime import date, datetime, time
 
-from sqlalchemy import String, Text, Date, Time, Integer, Numeric, ForeignKey, CHAR, UniqueConstraint
+from sqlalchemy import String, Text, Date, DateTime, Time, Integer, Numeric, ForeignKey, CHAR, UniqueConstraint
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -75,6 +75,43 @@ class TimetableSlot(Base, UUIDPKMixin, TimestampMixin):
     heure_debut: Mapped[time] = mapped_column(Time)
     heure_fin: Mapped[time] = mapped_column(Time)
     salle: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+
+class TeacherHourlyRate(Base, UUIDPKMixin, TimestampMixin):
+    """Taux horaire (FC/heure) d'un enseignant pour une année scolaire donnée —
+    n'a d'effet que sur les cycles marqués Cycle.paiement_horaire."""
+
+    __tablename__ = "teacher_hourly_rates"
+    __table_args__ = (UniqueConstraint("teacher_id", "academic_year_id", name="uq_hourly_rate_teacher_year"),)
+
+    school_id: Mapped[str] = mapped_column(CHAR(36), ForeignKey("schools.id", ondelete="CASCADE"), index=True)
+    teacher_id: Mapped[str] = mapped_column(CHAR(36), ForeignKey("teachers.id", ondelete="CASCADE"), index=True)
+    academic_year_id: Mapped[str] = mapped_column(
+        CHAR(36), ForeignKey("academic_years.id", ondelete="CASCADE"), index=True
+    )
+    taux: Mapped[float] = mapped_column(Numeric(10, 2))
+
+
+class TeachingSessionStatus(str, enum.Enum):
+    en_cours = "en_cours"
+    termine = "termine"
+
+
+class TeachingSession(Base, UUIDPKMixin, TimestampMixin):
+    """One actual delivery of a TimetableSlot on a given date — started/ended by the
+    teacher themselves, duration computed server-side to prevent tampering."""
+
+    __tablename__ = "teaching_sessions"
+
+    school_id: Mapped[str] = mapped_column(CHAR(36), ForeignKey("schools.id", ondelete="CASCADE"), index=True)
+    timetable_slot_id: Mapped[str] = mapped_column(
+        CHAR(36), ForeignKey("timetable_slots.id", ondelete="CASCADE"), index=True
+    )
+    date: Mapped[date] = mapped_column(Date, index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    duree_reelle: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    statut: Mapped[TeachingSessionStatus] = mapped_column(SAEnum(TeachingSessionStatus), default=TeachingSessionStatus.en_cours)
 
 
 class GradeStatus(str, enum.Enum):

@@ -43,7 +43,7 @@ import {
 import { cn } from '@/lib/utils';
 
 const emptyYearForm = { libelle: '', date_debut: '', date_fin: '', activate: false };
-const emptyCycleForm = { nom: '', ordre: 0, evaluation_mode: 'notes' as 'notes' | 'qualitatif' };
+const emptyCycleForm = { nom: '', ordre: 0, evaluation_mode: 'notes' as 'notes' | 'qualitatif', paiement_horaire: false };
 const emptyLevelForm = { cycle_id: '', nom: '', ordre: 0 };
 const emptyUserForm = { nom: '', email: '', password: '', telephone: '', role: 'secretary' as 'school_admin' | 'secretary' | 'accountant' | 'teacher' | 'parent' };
 const creatableRoles: { value: 'school_admin' | 'secretary' | 'accountant' | 'teacher' | 'parent'; label: string }[] = [
@@ -281,7 +281,7 @@ export function SettingsContent() {
 
   const openEditCycle = (c: Awaited<ReturnType<typeof fetchCycles>>[number]) => {
     setEditingCycleId(c.id);
-    setCycleForm({ nom: c.nom, ordre: c.ordre, evaluation_mode: c.evaluation_mode });
+    setCycleForm({ nom: c.nom, ordre: c.ordre, evaluation_mode: c.evaluation_mode, paiement_horaire: c.paiement_horaire });
     setShowCycleDialog(true);
   };
 
@@ -566,6 +566,20 @@ export function SettingsContent() {
                   </select>
                   <p className="text-xs text-muted-foreground mt-1">Le mode qualitatif remplace la saisie de notes par des appréciations libres (ex: préscolaire).</p>
                 </div>
+                <div className="rounded-xl border border-border p-3">
+                  <label className="flex items-center gap-2.5 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={cycleForm.paiement_horaire}
+                      onChange={e => setCycleForm({ ...cycleForm, paiement_horaire: e.target.checked })}
+                      className="rounded border-input"
+                    />
+                    <span className="font-medium text-foreground">Enseignants payés à l'heure</span>
+                  </label>
+                  <p className="text-xs text-muted-foreground mt-1.5">
+                    Active le suivi des séances et le rapport d'heures pour les classes de ce cycle (typiquement collège/lycée).
+                  </p>
+                </div>
                 <DialogFooter>
                   <Button type="submit" disabled={savingCycle} className="gap-1.5 rounded-xl">
                     {savingCycle ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
@@ -643,9 +657,14 @@ export function SettingsContent() {
                     </div>
                     <div className="min-w-0">
                       <p className="font-semibold text-foreground truncate">{cycle.nom}</p>
-                      <Badge variant="secondary" className="badge-modern text-xs mt-0.5">
-                        {cycle.evaluation_mode === 'qualitatif' ? 'Appréciations qualitatives' : 'Notes /20'}
-                      </Badge>
+                      <div className="flex flex-wrap gap-1.5 mt-0.5">
+                        <Badge variant="secondary" className="badge-modern text-xs">
+                          {cycle.evaluation_mode === 'qualitatif' ? 'Appréciations qualitatives' : 'Notes /20'}
+                        </Badge>
+                        {cycle.paiement_horaire && (
+                          <Badge variant="outline" className="badge-modern text-xs">Paiement à l'heure</Badge>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="flex gap-1 shrink-0">

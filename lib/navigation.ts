@@ -22,6 +22,7 @@ export const navItemsByRole: Record<Role, NavItem[]> = {
     { label: 'Présences', href: '/attendance', icon: 'CheckSquare' },
     { label: 'Notes', href: '/grades', icon: 'ClipboardList' },
     { label: 'Paiements', href: '/payments', icon: 'Wallet' },
+    { label: 'Suivi des heures', href: '/hours', icon: 'Clock' },
     { label: 'Communication', href: '/communication', icon: 'MessageSquare' },
     { label: 'Paramètres', href: '/settings', icon: 'Settings' },
   ],
@@ -37,6 +38,7 @@ export const navItemsByRole: Record<Role, NavItem[]> = {
     { label: 'Tableau de bord', href: '/dashboard', icon: 'LayoutDashboard' },
     { label: 'Paiements', href: '/payments', icon: 'Wallet' },
     { label: 'Élèves', href: '/students', icon: 'GraduationCap' },
+    { label: 'Suivi des heures', href: '/hours', icon: 'Clock' },
     { label: 'Rapports', href: '/reports', icon: 'BarChart3' },
   ],
   teacher: [

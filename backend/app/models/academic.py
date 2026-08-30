@@ -1,7 +1,7 @@
 import enum
 from datetime import date
 
-from sqlalchemy import String, Date, Integer, ForeignKey, CHAR
+from sqlalchemy import String, Date, Integer, Boolean, ForeignKey, CHAR
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -49,6 +49,9 @@ class Cycle(Base, UUIDPKMixin, TimestampMixin):
     nom: Mapped[str] = mapped_column(String(100))
     ordre: Mapped[int] = mapped_column(Integer, default=0)
     evaluation_mode: Mapped[EvaluationMode] = mapped_column(SAEnum(EvaluationMode), default=EvaluationMode.notes)
+    # Enseignants payés à l'heure sur ce cycle (typiquement collège/lycée, vacataires) —
+    # active le suivi des séances (démarrer/terminer) et le rapport d'heures.
+    paiement_horaire: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class Level(Base, UUIDPKMixin, TimestampMixin):

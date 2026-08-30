@@ -9,12 +9,14 @@ class CycleCreate(BaseModel):
     nom: str
     ordre: int = 0
     evaluation_mode: EvaluationMode = EvaluationMode.notes
+    paiement_horaire: bool = False
 
 
 class CycleUpdate(BaseModel):
     nom: str | None = None
     ordre: int | None = None
     evaluation_mode: EvaluationMode | None = None
+    paiement_horaire: bool | None = None
 
 
 class CycleOut(BaseModel):
@@ -23,6 +25,7 @@ class CycleOut(BaseModel):
     nom: str
     ordre: int
     evaluation_mode: EvaluationMode
+    paiement_horaire: bool
 
     model_config = {"from_attributes": True}
 

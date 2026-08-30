@@ -22,6 +22,7 @@ const WRITE_ROLES = {
   communication: ['school_admin', 'secretary'],
   assignments: ['school_admin'],
   timetable: ['school_admin'],
+  hourly_rates: ['school_admin', 'accountant'],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type WritableResource = keyof typeof WRITE_ROLES;
