@@ -5,23 +5,33 @@ import { Role } from './types';
  * create/edit/delete controls a role can't actually use instead of showing
  * them and letting the request 403. Keep in sync with the source of truth:
  * the WRITE_ROLES constant at the top of each backend/app/routers/*.py file.
+ *
+ * Deliberate exception — classrooms/subjects/teachers/assignments/cycles/
+ * levels/academic_years/timetable: the backend accepts writes from both
+ * school_admin and secretary (kept for schools without a staffed secretary
+ * account, and as a safety net), but school_admin is intentionally left out
+ * here. The director's day-to-day operational data entry (creating a
+ * teacher, building the timetable, editing the class/subject/cycle
+ * structure) moved to secretary, so their own screens no longer surface
+ * those controls — the director's role is meant to stay strategic
+ * oversight, not daily upkeep.
  */
 const WRITE_ROLES = {
-  classrooms: ['school_admin'],
-  subjects: ['school_admin'],
-  teachers: ['school_admin'],
+  classrooms: ['secretary'],
+  subjects: ['secretary'],
+  teachers: ['secretary'],
   students: ['school_admin', 'secretary'],
   parents: ['school_admin', 'secretary'],
   payments: ['school_admin', 'accountant'],
   invoices: ['school_admin', 'accountant'],
-  cycles: ['school_admin'],
-  levels: ['school_admin'],
-  academic_years: ['school_admin'],
+  cycles: ['secretary'],
+  levels: ['secretary'],
+  academic_years: ['secretary'],
   attendance: ['school_admin', 'secretary', 'teacher'],
   grades: ['school_admin', 'teacher'],
   communication: ['school_admin', 'secretary'],
-  assignments: ['school_admin'],
-  timetable: ['school_admin'],
+  assignments: ['secretary'],
+  timetable: ['secretary'],
   hourly_rates: ['school_admin', 'accountant'],
 } as const satisfies Record<string, readonly Role[]>;
 

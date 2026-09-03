@@ -11,7 +11,7 @@ from app.schemas.academic import LevelCreate, LevelUpdate, LevelOut
 router = APIRouter(prefix="/levels", tags=["levels"])
 
 READ_ROLES = (Role.school_admin, Role.secretary, Role.accountant, Role.teacher)
-WRITE_ROLES = (Role.school_admin,)
+WRITE_ROLES = (Role.school_admin, Role.secretary)
 
 
 @router.get("")

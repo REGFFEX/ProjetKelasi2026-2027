@@ -30,9 +30,11 @@ export const navItemsByRole: Record<Role, NavItem[]> = {
     { label: 'Tableau de bord', href: '/dashboard', icon: 'LayoutDashboard' },
     { label: 'Élèves', href: '/students', icon: 'GraduationCap' },
     { label: 'Parents', href: '/parents', icon: 'Users' },
+    { label: 'Enseignants', href: '/teachers', icon: 'UserCog' },
     { label: 'Classes', href: '/classes', icon: 'School' },
     { label: 'Emploi du temps', href: '/timetable', icon: 'CalendarDays' },
     { label: 'Communication', href: '/communication', icon: 'MessageSquare' },
+    { label: 'Paramètres', href: '/settings', icon: 'Settings' },
   ],
   accountant: [
     { label: 'Tableau de bord', href: '/dashboard', icon: 'LayoutDashboard' },

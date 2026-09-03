@@ -13,7 +13,7 @@ from app.security import hash_password
 router = APIRouter(prefix="/teachers", tags=["teachers"])
 
 READ_ROLES = (Role.school_admin, Role.secretary, Role.accountant, Role.teacher)
-WRITE_ROLES = (Role.school_admin,)
+WRITE_ROLES = (Role.school_admin, Role.secretary)
 
 
 def _serialize(db: Session, current_user: CurrentUser, teacher: Teacher) -> dict:

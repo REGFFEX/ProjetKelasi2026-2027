@@ -27,6 +27,8 @@ import {
 } from '@/lib/api';
 import { ApiError, assetUrl } from '@/lib/api-client';
 import { roleLabels } from '@/lib/navigation';
+import { useAuth } from '@/lib/auth-context';
+import { canWrite } from '@/lib/permissions';
 import type { Role } from '@/lib/types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -61,7 +63,7 @@ const editableRoles: { value: 'school_admin' | 'secretary' | 'accountant'; label
 
 type Tab = 'school' | 'hierarchy' | 'users' | 'years' | 'audit' | 'security';
 
-const tabs = [
+const allTabs = [
   { id: 'school' as Tab, label: 'Établissement', icon: School },
   { id: 'hierarchy' as Tab, label: 'Cycles & Niveaux', icon: Layers },
   { id: 'users' as Tab, label: 'Utilisateurs', icon: Users },
@@ -69,6 +71,11 @@ const tabs = [
   { id: 'audit' as Tab, label: 'Journal', icon: ScrollText },
   { id: 'security' as Tab, label: 'Sécurité', icon: Shield },
 ];
+
+// Secretary now owns the day-to-day pedagogical structure (cycles/niveaux, années
+// scolaires) but has no business in établissement identity, accounts, audit, or
+// security — those stay strategic/governance, school_admin-only.
+const SECRETARY_TABS: Tab[] = ['hierarchy', 'years'];
 
 const roleIcons: Record<Role, typeof Shield> = {
   super_admin: Shield,
@@ -103,7 +110,10 @@ function formatAuditValue(json: string | null): string {
 }
 
 export function SettingsContent() {
-  const [tab, setTab] = useState<Tab>('school');
+  const { profile } = useAuth();
+  const canManagePedagogy = canWrite(profile?.role, 'cycles');
+  const tabs = profile?.role === 'secretary' ? allTabs.filter(t => SECRETARY_TABS.includes(t.id)) : allTabs;
+  const [tab, setTab] = useState<Tab>(profile?.role === 'secretary' ? 'hierarchy' : 'school');
   const [loading, setLoading] = useState(true);
   const [school, setSchool] = useState<Awaited<ReturnType<typeof fetchMySchool>>>(null);
   const [schoolForm, setSchoolForm] = useState({ nom: '', adresse: '', telephone: '' });
@@ -632,9 +642,11 @@ export function SettingsContent() {
               <h3 className="font-semibold text-foreground">Cycles & Niveaux</h3>
               <p className="text-sm text-muted-foreground mt-0.5">École → Cycle → Niveau → Classe. Configurez la structure de votre établissement.</p>
             </div>
-            <Button size="sm" onClick={openCreateCycle} className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform shrink-0">
-              <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nouveau cycle</span>
-            </Button>
+            {canManagePedagogy && (
+              <Button size="sm" onClick={openCreateCycle} className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform shrink-0">
+                <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nouveau cycle</span>
+              </Button>
+            )}
           </div>
 
           {hierarchyError && (
@@ -667,14 +679,16 @@ export function SettingsContent() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex gap-1 shrink-0">
-                    <Button variant="ghost" size="sm" onClick={() => openEditCycle(cycle)} className="h-8 w-8 p-0 rounded-xl active:scale-95 transition-transform">
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleDeleteCycle(cycle.id)} className="h-8 w-8 p-0 rounded-xl text-destructive active:scale-95 transition-transform">
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  {canManagePedagogy && (
+                    <div className="flex gap-1 shrink-0">
+                      <Button variant="ghost" size="sm" onClick={() => openEditCycle(cycle)} className="h-8 w-8 p-0 rounded-xl active:scale-95 transition-transform">
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteCycle(cycle.id)} className="h-8 w-8 p-0 rounded-xl text-destructive active:scale-95 transition-transform">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="pl-3 border-l-2 border-border space-y-1.5">
@@ -684,22 +698,26 @@ export function SettingsContent() {
                         <GraduationCap className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                         <span className="truncate">{level.nom}</span>
                       </span>
-                      <div className="flex gap-1 shrink-0">
-                        <Button variant="ghost" size="sm" onClick={() => openEditLevel(level)} className="h-7 w-7 p-0 rounded-lg active:scale-95 transition-transform">
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteLevel(level.id)} className="h-7 w-7 p-0 rounded-lg text-destructive active:scale-95 transition-transform">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
+                      {canManagePedagogy && (
+                        <div className="flex gap-1 shrink-0">
+                          <Button variant="ghost" size="sm" onClick={() => openEditLevel(level)} className="h-7 w-7 p-0 rounded-lg active:scale-95 transition-transform">
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDeleteLevel(level.id)} className="h-7 w-7 p-0 rounded-lg text-destructive active:scale-95 transition-transform">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   ))}
-                  <button
-                    onClick={() => openCreateLevel(cycle.id)}
-                    className="flex items-center gap-2 text-sm text-primary px-3 py-2 rounded-xl hover:bg-primary/5 transition-colors w-full"
-                  >
-                    <Plus className="h-3.5 w-3.5" /> Ajouter un niveau
-                  </button>
+                  {canManagePedagogy && (
+                    <button
+                      onClick={() => openCreateLevel(cycle.id)}
+                      className="flex items-center gap-2 text-sm text-primary px-3 py-2 rounded-xl hover:bg-primary/5 transition-colors w-full"
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Ajouter un niveau
+                    </button>
+                  )}
                 </div>
               </Card>
             ))}
@@ -913,9 +931,11 @@ export function SettingsContent() {
           <Card className="overflow-hidden rounded-2xl shadow-card">
             <div className="p-4 border-b border-border flex items-center justify-between gap-2">
               <h3 className="font-semibold text-foreground truncate">Années scolaires</h3>
-              <Button size="sm" onClick={() => setShowYearDialog(true)} className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform shrink-0">
-                <Calendar className="h-4 w-4" /> <span className="hidden sm:inline">Nouvelle année</span>
-              </Button>
+              {canManagePedagogy && (
+                <Button size="sm" onClick={() => setShowYearDialog(true)} className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform shrink-0">
+                  <Calendar className="h-4 w-4" /> <span className="hidden sm:inline">Nouvelle année</span>
+                </Button>
+              )}
             </div>
             {yearError && (
               <div className="mx-4 mt-4 rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive animate-fade-in">
@@ -933,7 +953,7 @@ export function SettingsContent() {
                   </div>
                   {y.statut === 'active' ? (
                     <Badge className="badge-modern shrink-0 bg-success/10 text-success">Active</Badge>
-                  ) : (
+                  ) : canManagePedagogy ? (
                     <Button
                       size="sm"
                       variant="outline"
@@ -944,6 +964,8 @@ export function SettingsContent() {
                       {activatingId === y.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
                       Activer
                     </Button>
+                  ) : (
+                    <Badge variant="secondary" className="badge-modern shrink-0">Archivée</Badge>
                   )}
                 </div>
               ))}

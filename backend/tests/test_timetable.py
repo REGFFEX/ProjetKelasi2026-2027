@@ -119,19 +119,21 @@ def test_teacher_only_sees_own_slots(client, db_session):
     assert resp.json()["data"] == []
 
 
-def test_write_requires_school_admin(client, db_session):
+def test_write_requires_school_admin_or_secretary(client, db_session):
+    """Secretary now co-owns the timetable alongside school_admin (director stays
+    strategic oversight) — a role with neither, like accountant, must still be rejected."""
     school = setup_school_admin(client, db_session, email="admin2.tt@test.cd")
     level_id = make_level(db_session, school)
     assignment, _, _ = make_assignment(client, db_session, school, level_id, "prof4.tt@test.cd")
 
-    secretary = User(
-        school_id=school.id, nom="Secr", email="secretary.tt@test.cd", password_hash=hash_password("password123"),
-        telephone="", role=Role.secretary, statut=UserStatus.actif,
+    accountant = User(
+        school_id=school.id, nom="Compta", email="accountant.tt@test.cd", password_hash=hash_password("password123"),
+        telephone="", role=Role.accountant, statut=UserStatus.actif,
     )
-    db_session.add(secretary)
+    db_session.add(accountant)
     db_session.commit()
     client.post("/api/v1/auth/logout")
-    client.post("/api/v1/auth/login", json={"email": "secretary.tt@test.cd", "password": "password123", "school_id": school.id})
+    client.post("/api/v1/auth/login", json={"email": "accountant.tt@test.cd", "password": "password123", "school_id": school.id})
 
     resp = client.post(
         "/api/v1/timetable",

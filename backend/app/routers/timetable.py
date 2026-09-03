@@ -13,7 +13,7 @@ from app.schemas.timetable import TimetableSlotCreate, TimetableSlotUpdate, Time
 router = APIRouter(prefix="/timetable", tags=["timetable"])
 
 READ_ROLES = (Role.school_admin, Role.secretary, Role.teacher)
-WRITE_ROLES = (Role.school_admin,)
+WRITE_ROLES = (Role.school_admin, Role.secretary)
 
 
 def _get_assignment(db: Session, school_id: str, assignment_id: str) -> TeacherAssignment:

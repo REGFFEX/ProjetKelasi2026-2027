@@ -12,7 +12,7 @@ from app.schemas.assignments import TeacherAssignmentCreate, TeacherAssignmentOu
 router = APIRouter(prefix="/assignments", tags=["assignments"])
 
 READ_ROLES = (Role.school_admin, Role.secretary, Role.accountant, Role.teacher)
-WRITE_ROLES = (Role.school_admin,)
+WRITE_ROLES = (Role.school_admin, Role.secretary)
 
 
 @router.get("")
