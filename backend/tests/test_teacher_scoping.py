@@ -286,3 +286,54 @@ def test_teacher_assignment_reads_are_scoped_to_own(client, db_session):
     assignments = client.get("/api/v1/assignments").json()["data"]
     assert {a["subject_id"] for a in assignments} == {ctx["math"].id}
     assert other_assignment.id not in {a["id"] for a in assignments}
+
+
+def test_teacher_students_and_parents_reads_are_scoped(client, db_session):
+    """A teacher must only ever download the roster of their own assigned classroom —
+    not the whole school's students/parents, even though the UI never surfaces the rest."""
+    ctx = _setup(db_session)
+
+    from app.models.academic import AcademicYear
+    from app.models.people import Enrollment, EnrollmentStatus, Parent, StudentParent
+
+    year = db_session.query(AcademicYear).filter_by(school_id=ctx["school"].id).first()
+
+    own_student = ctx["student"]
+    other_student = Student(
+        school_id=ctx["school"].id, matricule="S-2", nom="Eleve", prenom="Deux", date_naissance=date(2015, 1, 1),
+        statut=UserStatus.actif,
+    )
+    db_session.add(other_student)
+    db_session.flush()
+
+    db_session.add_all([
+        Enrollment(school_id=ctx["school"].id, student_id=own_student.id, classroom_id=ctx["classroom_a"].id, academic_year_id=year.id, statut=EnrollmentStatus.active),
+        Enrollment(school_id=ctx["school"].id, student_id=other_student.id, classroom_id=ctx["classroom_b"].id, academic_year_id=year.id, statut=EnrollmentStatus.active),
+    ])
+
+    own_parent = Parent(school_id=ctx["school"].id, nom="Parent Un", telephone="", adresse="", profession="")
+    other_parent = Parent(school_id=ctx["school"].id, nom="Parent Deux", telephone="", adresse="", profession="")
+    db_session.add_all([own_parent, other_parent])
+    db_session.flush()
+    db_session.add_all([
+        StudentParent(school_id=ctx["school"].id, student_id=own_student.id, parent_id=own_parent.id),
+        StudentParent(school_id=ctx["school"].id, student_id=other_student.id, parent_id=other_parent.id),
+    ])
+    db_session.commit()
+
+    _login_teacher(client, ctx["school"].id)
+
+    students = client.get("/api/v1/students").json()["data"]
+    assert {s["id"] for s in students} == {own_student.id}
+
+    forbidden = client.get(f"/api/v1/students/{other_student.id}")
+    assert forbidden.status_code == 404
+
+    allowed = client.get(f"/api/v1/students/{own_student.id}")
+    assert allowed.status_code == 200
+
+    parents = client.get("/api/v1/parents").json()["data"]
+    assert {p["id"] for p in parents} == {own_parent.id}
+
+    links = client.get("/api/v1/students/parent-links").json()["data"]
+    assert {l["student_id"] for l in links} == {own_student.id}

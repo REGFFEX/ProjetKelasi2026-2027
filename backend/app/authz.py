@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.deps import CurrentUser
 from app.models.academic import AcademicYear, AcademicYearStatus
 from app.models.audit import AuditLog
-from app.models.people import Teacher, TeacherAssignment, Parent
+from app.models.people import Enrollment, Teacher, TeacherAssignment, Parent
 from app.models.user import Role
 from app.response import APIException
 
@@ -50,6 +50,23 @@ def get_teacher_classroom_ids(db: Session, current_user: CurrentUser) -> set[str
     rows = (
         db.query(TeacherAssignment.classroom_id)
         .filter(TeacherAssignment.teacher_id == teacher.id, TeacherAssignment.academic_year_id == year.id)
+        .all()
+    )
+    return {r[0] for r in rows}
+
+
+def get_teacher_student_ids(db: Session, current_user: CurrentUser) -> set[str]:
+    """Students actually enrolled (active year) in one of this teacher's assigned
+    classrooms — used to scope /students and /parents reads the same way."""
+    classroom_ids = get_teacher_classroom_ids(db, current_user)
+    if not classroom_ids:
+        return set()
+    year = get_active_academic_year_or_none(db, current_user.school_id)
+    if not year:
+        return set()
+    rows = (
+        db.query(Enrollment.student_id)
+        .filter(Enrollment.classroom_id.in_(classroom_ids), Enrollment.academic_year_id == year.id)
         .all()
     )
     return {r[0] for r in rows}

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, UploadFile
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.authz import get_active_academic_year_or_none, write_audit_log
+from app.authz import get_active_academic_year_or_none, get_teacher_student_ids, write_audit_log
 from app.db import get_db
 from app.deps import CurrentUser, require_role
 from app.file_storage import save_image_upload
@@ -83,9 +83,13 @@ def _set_enrollment(db: Session, current_user: CurrentUser, student_id: str, cla
 def list_students(
     current_user: CurrentUser = Depends(require_role(*READ_ROLES)), db: Session = Depends(get_db)
 ):
-    students = (
-        db.query(Student).filter(Student.school_id == current_user.school_id).order_by(Student.nom).all()
-    )
+    query = db.query(Student).filter(Student.school_id == current_user.school_id)
+    if current_user.role == Role.teacher:
+        student_ids = get_teacher_student_ids(db, current_user)
+        if not student_ids:
+            return envelope([])
+        query = query.filter(Student.id.in_(student_ids))
+    students = query.order_by(Student.nom).all()
     return envelope([_serialize(db, current_user, s) for s in students])
 
 
@@ -93,7 +97,13 @@ def list_students(
 def list_all_student_parents(
     current_user: CurrentUser = Depends(require_role(*READ_ROLES)), db: Session = Depends(get_db)
 ):
-    links = db.query(StudentParent).filter(StudentParent.school_id == current_user.school_id).all()
+    query = db.query(StudentParent).filter(StudentParent.school_id == current_user.school_id)
+    if current_user.role == Role.teacher:
+        student_ids = get_teacher_student_ids(db, current_user)
+        if not student_ids:
+            return envelope([])
+        query = query.filter(StudentParent.student_id.in_(student_ids))
+    links = query.all()
     return envelope(
         [
             {"id": l.id, "school_id": l.school_id, "student_id": l.student_id, "parent_id": l.parent_id}
@@ -347,5 +357,7 @@ def get_student_id_card(
 def _get_scoped(db: Session, current_user: CurrentUser, student_id: str) -> Student:
     student = db.get(Student, student_id)
     if not student or student.school_id != current_user.school_id:
+        raise APIException(404, "Élève introuvable.")
+    if current_user.role == Role.teacher and student_id not in get_teacher_student_ids(db, current_user):
         raise APIException(404, "Élève introuvable.")
     return student

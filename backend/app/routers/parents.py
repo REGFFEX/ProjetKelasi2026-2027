@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.authz import write_audit_log
+from app.authz import get_teacher_student_ids, write_audit_log
 from app.db import get_db
 from app.deps import CurrentUser, require_role
-from app.models.people import Parent
+from app.models.people import Parent, StudentParent
 from app.models.user import Role, User, UserStatus
 from app.response import envelope, APIException
 from app.schemas.parents import ParentCreate, ParentUpdate, ParentOut
@@ -38,7 +38,19 @@ def _provision_login(db: Session, current_user: CurrentUser, parent: Parent, pas
 
 @router.get("")
 def list_parents(current_user: CurrentUser = Depends(require_role(*READ_ROLES)), db: Session = Depends(get_db)):
-    parents = db.query(Parent).filter(Parent.school_id == current_user.school_id).order_by(Parent.nom).all()
+    query = db.query(Parent).filter(Parent.school_id == current_user.school_id)
+    if current_user.role == Role.teacher:
+        student_ids = get_teacher_student_ids(db, current_user)
+        if not student_ids:
+            return envelope([])
+        parent_ids = {
+            sp.parent_id
+            for sp in db.query(StudentParent).filter(StudentParent.student_id.in_(student_ids)).all()
+        }
+        if not parent_ids:
+            return envelope([])
+        query = query.filter(Parent.id.in_(parent_ids))
+    parents = query.order_by(Parent.nom).all()
     return envelope([ParentOut.model_validate(p).model_dump() for p in parents])
 
 
