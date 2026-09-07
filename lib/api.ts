@@ -731,8 +731,46 @@ export const fetchHoursReport = (mois?: number, annee?: number) => {
   return apiGet<TeacherHoursReport>(`/teaching-sessions/report${suffix}`);
 };
 
+export interface BusinessOverview {
+  academic_year_label: string | null;
+  revenue: {
+    current_month: number;
+    previous_month: number;
+    trend_pct: number | null;
+    collection_rate_pct: number | null;
+    total_invoiced: number;
+    total_collected: number;
+    total_outstanding: number;
+    revenue_per_student: number | null;
+    monthly_trend: { mois: string; montant: number }[];
+    by_fee_type: { type_frais: string; montant: number }[];
+  };
+  enrollment: {
+    current_total: number;
+    previous_total: number;
+    growth_pct: number | null;
+    attrition_pct: number | null;
+    new_enrollments: number;
+    by_cycle: { cycle: string; actuel: number; precedent: number }[];
+    has_previous_year: boolean;
+  };
+  staffing: {
+    active_teachers: number;
+    student_teacher_ratio: number | null;
+    hourly_cost_this_month: number | null;
+  };
+  alerts: string[];
+}
+
+export const fetchBusinessOverview = () => apiGet<BusinessOverview>('/reports/business-overview');
+
 // ── Helpers ───────────────────────────────────────────────────
 
 export function formatMoney(amount: number): string {
   return new Intl.NumberFormat('fr-FR').format(amount) + ' FC';
+}
+
+/** Compact form for space-constrained UI (stat tiles): 230000 -> "230 k FC". */
+export function formatMoneyCompact(amount: number): string {
+  return new Intl.NumberFormat('fr-FR', { notation: 'compact', maximumFractionDigits: 1 }).format(amount) + ' FC';
 }

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { formatMoney, fetchStudents, fetchAttendance, fetchInvoices, fetchPayments, fetchClassrooms, fetchLevels, fetchNotifications } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
+import { DirectorDashboardContent } from './director-dashboard-content';
 import type { Role } from '@/lib/types';
 
 interface ActivityItem {
@@ -46,15 +47,30 @@ const PIE_COLORS = ['#0ea5e9', '#22c55e', '#f59e0b', '#ef4444'];
 
 export function DashboardContent() {
   const { profile } = useAuth();
+  // The director gets a strategic/decisional view (revenue, enrollment growth,
+  // staffing cost) instead of this operational one (today's attendance, today's
+  // payments) — everyone else who lands on /dashboard keeps the operational view.
+  if (profile?.role === 'school_admin') {
+    return <DirectorDashboardContent />;
+  }
+  return <OperationalDashboardContent />;
+}
+
+function OperationalDashboardContent() {
+  const { profile } = useAuth();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       try {
+        // Accountant can't read /attendance (school_admin/secretary/teacher only) and
+        // doesn't need it — their stat tiles never show présences — so skip the call
+        // entirely rather than let one 403 sink the whole Promise.all.
+        const canReadAttendance = profile?.role !== 'accountant';
         const [students, attendance, invoices, payments, classrooms, levels, notifications] = await Promise.all([
           fetchStudents(),
-          fetchAttendance(),
+          canReadAttendance ? fetchAttendance() : Promise.resolve([]),
           fetchInvoices(),
           fetchPayments(),
           fetchClassrooms(),

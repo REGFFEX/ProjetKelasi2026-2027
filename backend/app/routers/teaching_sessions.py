@@ -170,29 +170,19 @@ def list_teaching_sessions(
     return envelope([TeachingSessionOut.model_validate(r).model_dump() for r in rows])
 
 
-@router.get("/report")
-def get_hours_report(
-    mois: int = Query(default=None),
-    annee: int = Query(default=None),
-    current_user: CurrentUser = Depends(require_role(*MANAGE_ROLES)),
-    db: Session = Depends(get_db),
-):
-    today = date.today()
-    month = mois or today.month
-    year_num = annee or today.year
-
-    year = get_active_academic_year(db, current_user.school_id)
+def compute_hours_report(db: Session, school_id: str, month: int, year_num: int) -> TeacherHoursReport:
+    year = get_active_academic_year(db, school_id)
     rates = {
         r.teacher_id: float(r.taux)
         for r in db.query(TeacherHourlyRate)
-        .filter(TeacherHourlyRate.school_id == current_user.school_id, TeacherHourlyRate.academic_year_id == year.id)
+        .filter(TeacherHourlyRate.school_id == school_id, TeacherHourlyRate.academic_year_id == year.id)
         .all()
     }
 
     sessions = (
         db.query(TeachingSession)
         .filter(
-            TeachingSession.school_id == current_user.school_id,
+            TeachingSession.school_id == school_id,
             TeachingSession.statut == TeachingSessionStatus.termine,
         )
         .all()
@@ -237,10 +227,22 @@ def get_hours_report(
         )
     lignes.sort(key=lambda r: r.nom)
 
-    return envelope(
-        TeacherHoursReport(
-            mois=month, annee=year_num, lignes=lignes,
-            total_heures=round(sum(l.total_heures for l in lignes), 2),
-            total_montant=round(sum(l.montant for l in lignes), 0),
-        ).model_dump()
+    return TeacherHoursReport(
+        mois=month, annee=year_num, lignes=lignes,
+        total_heures=round(sum(l.total_heures for l in lignes), 2),
+        total_montant=round(sum(l.montant for l in lignes), 0),
     )
+
+
+@router.get("/report")
+def get_hours_report(
+    mois: int = Query(default=None),
+    annee: int = Query(default=None),
+    current_user: CurrentUser = Depends(require_role(*MANAGE_ROLES)),
+    db: Session = Depends(get_db),
+):
+    today = date.today()
+    month = mois or today.month
+    year_num = annee or today.year
+    report = compute_hours_report(db, current_user.school_id, month, year_num)
+    return envelope(report.model_dump())
