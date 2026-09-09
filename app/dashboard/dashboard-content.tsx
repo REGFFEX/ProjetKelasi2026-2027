@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { formatMoney, fetchStudents, fetchAttendance, fetchInvoices, fetchPayments, fetchClassrooms, fetchLevels, fetchNotifications } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { DirectorDashboardContent } from './director-dashboard-content';
+import { TeacherHomeContent } from './teacher-home-content';
 import type { Role } from '@/lib/types';
 
 interface ActivityItem {
@@ -48,10 +49,14 @@ const PIE_COLORS = ['#0ea5e9', '#22c55e', '#f59e0b', '#ef4444'];
 export function DashboardContent() {
   const { profile } = useAuth();
   // The director gets a strategic/decisional view (revenue, enrollment growth,
-  // staffing cost) instead of this operational one (today's attendance, today's
-  // payments) — everyone else who lands on /dashboard keeps the operational view.
+  // staffing cost); the teacher gets a day-at-a-glance home (today's classes,
+  // what's left to grade, présences not yet taken) instead of landing cold on
+  // "Mes classes" — everyone else keeps this operational view.
   if (profile?.role === 'school_admin') {
     return <DirectorDashboardContent />;
+  }
+  if (profile?.role === 'teacher') {
+    return <TeacherHomeContent />;
   }
   return <OperationalDashboardContent />;
 }

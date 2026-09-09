@@ -44,6 +44,7 @@ export const navItemsByRole: Record<Role, NavItem[]> = {
     { label: 'Rapports', href: '/reports', icon: 'BarChart3' },
   ],
   teacher: [
+    { label: 'Accueil', href: '/dashboard', icon: 'LayoutDashboard' },
     { label: 'Mes classes', href: '/classes', icon: 'School' },
     { label: 'Mes horaires', href: '/timetable', icon: 'CalendarDays' },
     { label: 'Présences', href: '/attendance', icon: 'CheckSquare' },
@@ -79,7 +80,7 @@ export function getDefaultRouteForRole(role?: Role): string {
     case 'accountant':
       return '/payments';
     case 'teacher':
-      return '/classes';
+      return '/dashboard';
     case 'parent':
       return '/parent';
     default:
