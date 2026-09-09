@@ -33,6 +33,7 @@ export const navItemsByRole: Record<Role, NavItem[]> = {
     { label: 'Enseignants', href: '/teachers', icon: 'UserCog' },
     { label: 'Classes', href: '/classes', icon: 'School' },
     { label: 'Emploi du temps', href: '/timetable', icon: 'CalendarDays' },
+    { label: 'Présences', href: '/attendance', icon: 'CheckSquare' },
     { label: 'Communication', href: '/communication', icon: 'MessageSquare' },
     { label: 'Paramètres', href: '/settings', icon: 'Settings' },
   ],

@@ -33,7 +33,7 @@ def list_evaluation_types(
 @router.post("/evaluation-types")
 def create_evaluation_type(
     body: EvaluationTypeCreate,
-    current_user: CurrentUser = Depends(require_role(Role.school_admin)),
+    current_user: CurrentUser = Depends(require_role(Role.school_admin, Role.secretary)),
     db: Session = Depends(get_db),
 ):
     row = EvaluationType(school_id=current_user.school_id, nom=body.nom)

@@ -14,6 +14,10 @@ import {
   fetchAcademicYears,
   createAcademicYear,
   activateAcademicYear,
+  fetchTerms,
+  createTerm,
+  fetchEvaluationTypes,
+  createEvaluationType,
   fetchCycles,
   createCycle,
   updateCycle,
@@ -45,6 +49,7 @@ import {
 import { cn } from '@/lib/utils';
 
 const emptyYearForm = { libelle: '', date_debut: '', date_fin: '', activate: false };
+const emptyTermForm = { academic_year_id: '', libelle: '', date_debut: '', date_fin: '' };
 const emptyCycleForm = { nom: '', ordre: 0, evaluation_mode: 'notes' as 'notes' | 'qualitatif', paiement_horaire: false };
 const emptyLevelForm = { cycle_id: '', nom: '', ordre: 0 };
 const emptyUserForm = { nom: '', email: '', password: '', telephone: '', role: 'secretary' as 'school_admin' | 'secretary' | 'accountant' | 'teacher' | 'parent' };
@@ -129,6 +134,15 @@ export function SettingsContent() {
   const [savingYear, setSavingYear] = useState(false);
   const [activatingId, setActivatingId] = useState<string | null>(null);
   const [yearError, setYearError] = useState('');
+  const [terms, setTerms] = useState<Awaited<ReturnType<typeof fetchTerms>>>([]);
+  const [showTermDialog, setShowTermDialog] = useState(false);
+  const [termForm, setTermForm] = useState(emptyTermForm);
+  const [savingTerm, setSavingTerm] = useState(false);
+  const [termError, setTermError] = useState('');
+  const [evaluationTypes, setEvaluationTypes] = useState<Awaited<ReturnType<typeof fetchEvaluationTypes>>>([]);
+  const [newEvalTypeName, setNewEvalTypeName] = useState('');
+  const [savingEvalType, setSavingEvalType] = useState(false);
+  const [evalTypeError, setEvalTypeError] = useState('');
 
   const [cycles, setCycles] = useState<Awaited<ReturnType<typeof fetchCycles>>>([]);
   const [levels, setLevels] = useState<Awaited<ReturnType<typeof fetchLevels>>>([]);
@@ -186,12 +200,14 @@ export function SettingsContent() {
     let cancelled = false;
     (async () => {
       try {
-        const [s, u, y, cyc, lvl] = await Promise.all([
+        const [s, u, y, cyc, lvl, trm, evt] = await Promise.all([
           fetchMySchool(),
           fetchUsers(),
           fetchAcademicYears(),
           fetchCycles(),
           fetchLevels(),
+          fetchTerms(),
+          fetchEvaluationTypes(),
         ]);
         if (cancelled) return;
         setSchool(s);
@@ -200,6 +216,8 @@ export function SettingsContent() {
         setAcademicYears(y);
         setCycles(cyc.sort((a, b) => a.ordre - b.ordre));
         setLevels(lvl.sort((a, b) => a.ordre - b.ordre));
+        setTerms(trm);
+        setEvaluationTypes(evt);
       } catch (e) {
         console.error('Failed to load settings data:', e);
       } finally {
@@ -280,6 +298,44 @@ export function SettingsContent() {
       setYearError(err instanceof ApiError ? err.message : 'Échec de l\'activation.');
     } finally {
       setActivatingId(null);
+    }
+  };
+
+  const openCreateTerm = (academicYearId: string) => {
+    setTermForm({ ...emptyTermForm, academic_year_id: academicYearId });
+    setTermError('');
+    setShowTermDialog(true);
+  };
+
+  const handleCreateTerm = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!termForm.libelle.trim() || !termForm.date_debut || !termForm.date_fin) return;
+    setSavingTerm(true);
+    setTermError('');
+    try {
+      const created = await createTerm(termForm);
+      setTerms(prev => [...prev, created]);
+      setShowTermDialog(false);
+    } catch (err) {
+      setTermError(err instanceof ApiError ? err.message : "Échec de la création de la période.");
+    } finally {
+      setSavingTerm(false);
+    }
+  };
+
+  const handleCreateEvalType = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEvalTypeName.trim()) return;
+    setSavingEvalType(true);
+    setEvalTypeError('');
+    try {
+      const created = await createEvaluationType(newEvalTypeName.trim());
+      setEvaluationTypes(prev => [...prev, created]);
+      setNewEvalTypeName('');
+    } catch (err) {
+      setEvalTypeError(err instanceof ApiError ? err.message : "Échec de la création du type.");
+    } finally {
+      setSavingEvalType(false);
     }
   };
 
@@ -722,6 +778,35 @@ export function SettingsContent() {
               </Card>
             ))}
           </div>
+
+          <Card className="p-4 sm:p-5 rounded-2xl shadow-card">
+            <h3 className="font-semibold text-foreground mb-1">Types d'évaluation</h3>
+            <p className="text-sm text-muted-foreground mb-3">
+              Devoir, Interrogation, Composition... utilisés (facultativement) lors de la création d'une évaluation dans Notes.
+            </p>
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {evaluationTypes.map(et => (
+                <Badge key={et.id} variant="secondary" className="badge-modern text-xs">{et.nom}</Badge>
+              ))}
+              {evaluationTypes.length === 0 && (
+                <p className="text-xs text-muted-foreground italic">Aucun type créé pour le moment.</p>
+              )}
+            </div>
+            {canManagePedagogy && (
+              <form onSubmit={handleCreateEvalType} className="flex gap-2">
+                <Input
+                  placeholder="ex: Composition"
+                  value={newEvalTypeName}
+                  onChange={e => setNewEvalTypeName(e.target.value)}
+                  className="rounded-xl text-sm max-w-xs"
+                />
+                <Button type="submit" size="sm" variant="outline" disabled={!newEvalTypeName.trim() || savingEvalType} className="gap-1.5 rounded-xl shrink-0">
+                  {savingEvalType ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Ajouter
+                </Button>
+              </form>
+            )}
+            {evalTypeError && <p className="text-xs text-destructive mt-2">{evalTypeError}</p>}
+          </Card>
         </>
       )}
 
@@ -928,6 +1013,37 @@ export function SettingsContent() {
             </DialogContent>
           </Dialog>
 
+          <Dialog open={showTermDialog} onOpenChange={setShowTermDialog}>
+            <DialogContent className="rounded-2xl">
+              <DialogHeader>
+                <DialogTitle>Nouvelle période</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleCreateTerm} className="space-y-3">
+                <div>
+                  <Label htmlFor="tm-libelle">Libellé *</Label>
+                  <Input id="tm-libelle" placeholder="ex: Trimestre 1" value={termForm.libelle} onChange={e => setTermForm({ ...termForm, libelle: e.target.value })} required className="mt-1.5 rounded-xl" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor="tm-debut">Début *</Label>
+                    <Input id="tm-debut" type="date" value={termForm.date_debut} onChange={e => setTermForm({ ...termForm, date_debut: e.target.value })} required className="mt-1.5 rounded-xl" />
+                  </div>
+                  <div>
+                    <Label htmlFor="tm-fin">Fin *</Label>
+                    <Input id="tm-fin" type="date" value={termForm.date_fin} onChange={e => setTermForm({ ...termForm, date_fin: e.target.value })} required className="mt-1.5 rounded-xl" />
+                  </div>
+                </div>
+                {termError && <p className="text-xs text-destructive">{termError}</p>}
+                <DialogFooter>
+                  <Button type="submit" disabled={savingTerm} className="gap-1.5 rounded-xl">
+                    {savingTerm ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calendar className="h-4 w-4" />}
+                    Créer
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+
           <Card className="overflow-hidden rounded-2xl shadow-card">
             <div className="p-4 border-b border-border flex items-center justify-between gap-2">
               <h3 className="font-semibold text-foreground truncate">Années scolaires</h3>
@@ -944,29 +1060,54 @@ export function SettingsContent() {
             )}
             <div className="divide-y divide-border">
               {academicYears.map(y => (
-                <div key={y.id} className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{y.libelle}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                      {new Date(y.date_debut).toLocaleDateString('fr-FR')} → {new Date(y.date_fin).toLocaleDateString('fr-FR')}
-                    </p>
+                <div key={y.id} className="p-4 hover:bg-muted/30 transition-colors">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{y.libelle}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                        {new Date(y.date_debut).toLocaleDateString('fr-FR')} → {new Date(y.date_fin).toLocaleDateString('fr-FR')}
+                      </p>
+                    </div>
+                    {y.statut === 'active' ? (
+                      <Badge className="badge-modern shrink-0 bg-success/10 text-success">Active</Badge>
+                    ) : canManagePedagogy ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={activatingId === y.id}
+                        onClick={() => handleActivateYear(y.id)}
+                        className="gap-1.5 rounded-xl shrink-0"
+                      >
+                        {activatingId === y.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                        Activer
+                      </Button>
+                    ) : (
+                      <Badge variant="secondary" className="badge-modern shrink-0">Archivée</Badge>
+                    )}
                   </div>
-                  {y.statut === 'active' ? (
-                    <Badge className="badge-modern shrink-0 bg-success/10 text-success">Active</Badge>
-                  ) : canManagePedagogy ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={activatingId === y.id}
-                      onClick={() => handleActivateYear(y.id)}
-                      className="gap-1.5 rounded-xl shrink-0"
-                    >
-                      {activatingId === y.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                      Activer
-                    </Button>
-                  ) : (
-                    <Badge variant="secondary" className="badge-modern shrink-0">Archivée</Badge>
-                  )}
+
+                  <div className="pl-3 border-l-2 border-border space-y-1.5 mt-3">
+                    {terms.filter(t => t.academic_year_id === y.id).map(t => (
+                      <div key={t.id} className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-foreground">
+                        <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <span className="truncate">{t.libelle}</span>
+                        <span className="text-xs text-muted-foreground truncate">
+                          ({new Date(t.date_debut).toLocaleDateString('fr-FR')} → {new Date(t.date_fin).toLocaleDateString('fr-FR')})
+                        </span>
+                      </div>
+                    ))}
+                    {terms.filter(t => t.academic_year_id === y.id).length === 0 && (
+                      <p className="text-xs text-muted-foreground italic px-3">Aucune période créée pour cette année.</p>
+                    )}
+                    {canManagePedagogy && (
+                      <button
+                        onClick={() => openCreateTerm(y.id)}
+                        className="flex items-center gap-2 text-sm text-primary px-3 py-2 rounded-xl hover:bg-primary/5 transition-colors w-full"
+                      >
+                        <Plus className="h-3.5 w-3.5" /> Ajouter une période
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

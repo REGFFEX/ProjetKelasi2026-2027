@@ -31,6 +31,10 @@ export function HoursContent() {
         if (cancelled) return;
         setTeachers(t);
         setRates(r);
+        // Pre-fill each teacher's field with their real current rate — showing it
+        // only as a placeholder left "Enregistrer" disabled until re-typed, which
+        // read as a dead button for anyone just confirming an existing rate.
+        setRateDrafts(Object.fromEntries(r.map(rate => [rate.teacher_id, String(rate.taux)])));
       } catch (e) {
         console.error('Failed to load hours data:', e);
       } finally {

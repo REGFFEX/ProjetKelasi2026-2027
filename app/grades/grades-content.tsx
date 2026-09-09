@@ -229,6 +229,13 @@ export function GradesContent() {
                   </select>
                 </div>
               </div>
+              {terms.length === 0 && (
+                <div className="rounded-xl bg-warning/10 px-3 py-2.5 text-xs text-warning">
+                  Aucune période scolaire n'existe encore — une évaluation doit être rattachée à une période
+                  (ex: Trimestre 1). Demandez au directeur ou au secrétariat d'en créer une dans
+                  Paramètres → Années scolaires avant de continuer.
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label htmlFor="as-term">Période *</Label>

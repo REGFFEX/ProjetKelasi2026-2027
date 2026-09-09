@@ -1,8 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Mail, Phone, BookOpen, School, CheckCircle2, XCircle, Loader2, X, KeyRound } from 'lucide-react';
-import { fetchTeachers, fetchSubjects, fetchClassrooms, createTeacher, type AssignmentPairInput } from '@/lib/api';
+import { Plus, Mail, Phone, BookOpen, School, CheckCircle2, XCircle, Loader2, X, KeyRound, Pencil, Trash2 } from 'lucide-react';
+import {
+  fetchTeachers, fetchSubjects, fetchClassrooms, fetchAssignments,
+  createTeacher, updateTeacher, deleteTeacher, type AssignmentPairInput, type DbTeacher,
+} from '@/lib/api';
+import { ApiError } from '@/lib/api-client';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -28,13 +32,17 @@ export function TeachersContent() {
   const [teachers, setTeachers] = useState<Awaited<ReturnType<typeof fetchTeachers>>>([]);
   const [subjects, setSubjects] = useState<Awaited<ReturnType<typeof fetchSubjects>>>([]);
   const [classrooms, setClassrooms] = useState<Awaited<ReturnType<typeof fetchClassrooms>>>([]);
-  const [showCreate, setShowCreate] = useState(false);
-  const [creating, setCreating] = useState(false);
+  const [showDialog, setShowDialog] = useState(false);
+  const [editingTeacherId, setEditingTeacherId] = useState<string | null>(null);
+  const [loadingAssignments, setLoadingAssignments] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
   const [form, setForm] = useState(emptyTeacherForm);
   const [pendingSubjectId, setPendingSubjectId] = useState('');
   const [pendingClassroomId, setPendingClassroomId] = useState('');
   const [withLogin, setWithLogin] = useState(false);
   const [loginPassword, setLoginPassword] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,22 +89,71 @@ export function TeachersContent() {
     }));
   };
 
-  const handleCreateTeacher = async (e: React.FormEvent) => {
+  const resetDialogState = () => {
+    setForm(emptyTeacherForm);
+    setWithLogin(false);
+    setLoginPassword('');
+    setFormError('');
+    setEditingTeacherId(null);
+  };
+
+  const openCreate = () => {
+    resetDialogState();
+    setShowDialog(true);
+  };
+
+  const openEdit = async (teacher: DbTeacher) => {
+    setEditingTeacherId(teacher.id);
+    setForm({ nom: teacher.nom, prenom: teacher.prenom, email: teacher.email, telephone: teacher.telephone, assignments: [] });
+    setWithLogin(false);
+    setLoginPassword('');
+    setFormError('');
+    setShowDialog(true);
+    setLoadingAssignments(true);
+    try {
+      const assignments = await fetchAssignments(teacher.id);
+      setForm(prev => ({ ...prev, assignments: assignments.map(a => ({ subject_id: a.subject_id, classroom_id: a.classroom_id })) }));
+    } catch (err) {
+      console.error('Failed to load teacher assignments:', err);
+    } finally {
+      setLoadingAssignments(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.nom.trim() || !form.prenom.trim() || !form.email.trim()) return;
     if (withLogin && loginPassword.length < 6) return;
-    setCreating(true);
+    setSaving(true);
+    setFormError('');
     try {
-      const created = await createTeacher(withLogin ? { ...form, password: loginPassword } : form);
-      setTeachers(prev => [...prev, created].sort((a, b) => a.nom.localeCompare(b.nom)));
-      setForm(emptyTeacherForm);
-      setWithLogin(false);
-      setLoginPassword('');
-      setShowCreate(false);
+      const payload = withLogin ? { ...form, password: loginPassword } : form;
+      if (editingTeacherId) {
+        const updated = await updateTeacher(editingTeacherId, payload);
+        setTeachers(prev => prev.map(t => (t.id === updated.id ? updated : t)).sort((a, b) => a.nom.localeCompare(b.nom)));
+      } else {
+        const created = await createTeacher(payload);
+        setTeachers(prev => [...prev, created].sort((a, b) => a.nom.localeCompare(b.nom)));
+      }
+      setShowDialog(false);
+      resetDialogState();
     } catch (err) {
-      console.error('Failed to create teacher:', err);
+      setFormError(err instanceof ApiError ? err.message : "Échec de l'enregistrement.");
     } finally {
-      setCreating(false);
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Supprimer cet enseignant ? Ses affectations et son éventuel compte de connexion seront également supprimés.')) return;
+    setDeletingId(id);
+    try {
+      await deleteTeacher(id);
+      setTeachers(prev => prev.filter(t => t.id !== id));
+    } catch (err) {
+      console.error('Failed to delete teacher:', err);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -108,18 +165,18 @@ export function TeachersContent() {
           <p className="text-muted-foreground mt-1">{teachers.length} enseignant(s) — {teachers.filter(t => t.statut === 'actif').length} actifs</p>
         </div>
         {canManage && (
-          <Button onClick={() => setShowCreate(true)} className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform">
+          <Button onClick={openCreate} className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform">
             <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nouvel enseignant</span>
           </Button>
         )}
       </div>
 
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+      <Dialog open={showDialog} onOpenChange={(open) => { setShowDialog(open); if (!open) resetDialogState(); }}>
         <DialogContent className="rounded-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Nouvel enseignant</DialogTitle>
+            <DialogTitle>{editingTeacherId ? "Modifier l'enseignant" : 'Nouvel enseignant'}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleCreateTeacher} className="space-y-3">
+          <form onSubmit={handleSubmit} className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="t-prenom">Prénom *</Label>
@@ -141,17 +198,19 @@ export function TeachersContent() {
             <div className="rounded-xl border border-border p-3">
               <label className="flex items-center gap-2.5 text-sm cursor-pointer">
                 <input type="checkbox" checked={withLogin} onChange={e => setWithLogin(e.target.checked)} className="rounded border-input" />
-                <span className="font-medium text-foreground">Créer un accès de connexion</span>
+                <span className="font-medium text-foreground">
+                  {editingTeacherId ? 'Réinitialiser le mot de passe' : 'Créer un accès de connexion'}
+                </span>
               </label>
               {withLogin && (
                 <div className="mt-2.5">
-                  <Label htmlFor="t-password">Mot de passe *</Label>
+                  <Label htmlFor="t-password">{editingTeacherId ? 'Nouveau mot de passe *' : 'Mot de passe *'}</Label>
                   <Input id="t-password" type="password" minLength={6} value={loginPassword} onChange={e => setLoginPassword(e.target.value)} required={withLogin} className="mt-1.5 rounded-xl" />
                 </div>
               )}
             </div>
             <div>
-              <Label className="mb-1.5 block">Affectations (matière → classe) *</Label>
+              <Label className="mb-1.5 block">Affectations (matière → classe)</Label>
               <p className="text-xs text-muted-foreground mb-2">
                 Détermine ce que cet enseignant pourra noter et pour quelles classes — pas d'accès en dehors de ces affectations.
               </p>
@@ -177,23 +236,30 @@ export function TeachersContent() {
                 </Button>
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto scrollbar-thin">
-                {form.assignments.map(a => (
-                  <span key={`${a.subject_id}-${a.classroom_id}`} className="badge-modern text-xs px-2.5 py-1 rounded-full border border-primary bg-primary/10 text-primary inline-flex items-center gap-1.5">
-                    {getSubjectName(a.subject_id)} → {getClassroomName(a.classroom_id)}
-                    <button type="button" onClick={() => removeAssignment(a.subject_id, a.classroom_id)} className="hover:text-destructive">
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
-                {form.assignments.length === 0 && (
-                  <p className="text-xs text-muted-foreground italic">Aucune affectation pour le moment.</p>
+                {loadingAssignments ? (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1.5"><Loader2 className="h-3 w-3 animate-spin" /> Chargement des affectations...</p>
+                ) : (
+                  <>
+                    {form.assignments.map(a => (
+                      <span key={`${a.subject_id}-${a.classroom_id}`} className="badge-modern text-xs px-2.5 py-1 rounded-full border border-primary bg-primary/10 text-primary inline-flex items-center gap-1.5">
+                        {getSubjectName(a.subject_id)} → {getClassroomName(a.classroom_id)}
+                        <button type="button" onClick={() => removeAssignment(a.subject_id, a.classroom_id)} className="hover:text-destructive">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                    {form.assignments.length === 0 && (
+                      <p className="text-xs text-muted-foreground italic">Aucune affectation pour le moment.</p>
+                    )}
+                  </>
                 )}
               </div>
             </div>
+            {formError && <p className="text-xs text-destructive">{formError}</p>}
             <DialogFooter>
-              <Button type="submit" disabled={creating} className="gap-1.5 rounded-xl">
-                {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                Créer
+              <Button type="submit" disabled={saving} className="gap-1.5 rounded-xl">
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : editingTeacherId ? null : <Plus className="h-4 w-4" />}
+                {editingTeacherId ? 'Enregistrer' : 'Créer'}
               </Button>
             </DialogFooter>
           </form>
@@ -227,6 +293,19 @@ export function TeachersContent() {
                   )}
                 </div>
               </div>
+              {canManage && (
+                <div className="flex gap-1 shrink-0">
+                  <Button variant="ghost" size="sm" onClick={() => openEdit(t)} className="h-8 w-8 p-0 rounded-xl active:scale-95 transition-transform">
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost" size="sm" onClick={() => handleDelete(t.id)} disabled={deletingId === t.id}
+                    className="h-8 w-8 p-0 rounded-xl text-destructive active:scale-95 transition-transform"
+                  >
+                    {deletingId === t.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  </Button>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2 text-sm">

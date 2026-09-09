@@ -142,6 +142,18 @@ export function AttendanceContent() {
     );
   }
 
+  if (classrooms.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center gap-2">
+        <CheckSquare className="h-10 w-10 text-muted-foreground/40" />
+        <p className="text-foreground font-medium">Aucune classe configurée</p>
+        <p className="text-sm text-muted-foreground max-w-sm">
+          Il faut d'abord créer au moins une classe (menu Classes) avant de pouvoir faire l'appel.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">

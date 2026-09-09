@@ -2,15 +2,33 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { Wallet, Plus, Search, Download, FileText, ArrowLeft, Save, CreditCard, TrendingUp, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
-import { fetchInvoices, fetchPayments, fetchStudents, fetchClassrooms, formatMoney, createPayment, downloadPaymentReceipt } from '@/lib/api';
-import type { PaymentMethod } from '@/lib/types';
+import { fetchInvoices, fetchPayments, fetchStudents, fetchClassrooms, formatMoney, createPayment, createInvoice, downloadPaymentReceipt } from '@/lib/api';
+import { ApiError } from '@/lib/api-client';
+import type { PaymentMethod, FeeType } from '@/lib/types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
 import { canWrite } from '@/lib/permissions';
+
+const feeTypeLabels: Record<FeeType, string> = {
+  scolarite: 'Scolarité',
+  inscription: 'Inscription',
+  cantine: 'Cantine',
+  transport: 'Transport',
+  autre: 'Autre',
+};
+
+const emptyInvoiceForm = { student_id: '', type_frais: 'scolarite' as FeeType, montant_total: '', date_emission: new Date().toISOString().split('T')[0] };
 
 const statusConfig = {
   paye: { label: 'Payé', color: 'text-success', bg: 'bg-success/10', dot: 'bg-success' },
@@ -45,6 +63,10 @@ export function PaymentsContent() {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('especes');
   const [submittingPayment, setSubmittingPayment] = useState(false);
+  const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
+  const [invoiceForm, setInvoiceForm] = useState(emptyInvoiceForm);
+  const [savingInvoice, setSavingInvoice] = useState(false);
+  const [invoiceError, setInvoiceError] = useState('');
 
   const [loading, setLoading] = useState(true);
   const [invoices, setInvoices] = useState<Awaited<ReturnType<typeof fetchInvoices>>>([]);
@@ -102,6 +124,29 @@ export function PaymentsContent() {
     setView('payment');
   };
 
+  const handleCreateInvoice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const montant = parseFloat(invoiceForm.montant_total);
+    if (!invoiceForm.student_id || !montant || montant <= 0) return;
+    setSavingInvoice(true);
+    setInvoiceError('');
+    try {
+      const created = await createInvoice({
+        student_id: invoiceForm.student_id,
+        type_frais: invoiceForm.type_frais,
+        montant_total: montant,
+        date_emission: invoiceForm.date_emission,
+      });
+      setInvoices(prev => [created, ...prev]);
+      setShowInvoiceDialog(false);
+      setInvoiceForm(emptyInvoiceForm);
+    } catch (err) {
+      setInvoiceError(err instanceof ApiError ? err.message : "Échec de la création de la facture.");
+    } finally {
+      setSavingInvoice(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -120,11 +165,65 @@ export function PaymentsContent() {
             <p className="text-sm text-muted-foreground mt-0.5">Gérez les factures, paiements et reçus</p>
           </div>
           {canManage && (
-            <Button className="gap-1.5 rounded-xl active:scale-[0.97] shrink-0">
+            <Button onClick={() => setShowInvoiceDialog(true)} className="gap-1.5 rounded-xl active:scale-[0.97] shrink-0">
               <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nouvelle facture</span>
             </Button>
           )}
         </div>
+
+        <Dialog open={showInvoiceDialog} onOpenChange={(open) => { setShowInvoiceDialog(open); if (!open) { setInvoiceForm(emptyInvoiceForm); setInvoiceError(''); } }}>
+          <DialogContent className="rounded-2xl">
+            <DialogHeader>
+              <DialogTitle>Nouvelle facture</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleCreateInvoice} className="space-y-3">
+              <div>
+                <Label htmlFor="inv-student">Élève *</Label>
+                <select
+                  id="inv-student" value={invoiceForm.student_id} onChange={e => setInvoiceForm({ ...invoiceForm, student_id: e.target.value })} required
+                  className="mt-1.5 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">Choisir un élève...</option>
+                  {students.map(s => <option key={s.id} value={s.id}>{s.prenom} {s.nom} — {s.matricule}</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="inv-type">Type de frais *</Label>
+                  <select
+                    id="inv-type" value={invoiceForm.type_frais} onChange={e => setInvoiceForm({ ...invoiceForm, type_frais: e.target.value as FeeType })}
+                    className="mt-1.5 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    {(Object.keys(feeTypeLabels) as FeeType[]).map(ft => <option key={ft} value={ft}>{feeTypeLabels[ft]}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="inv-montant">Montant (FC) *</Label>
+                  <Input
+                    id="inv-montant" type="number" min={1} value={invoiceForm.montant_total}
+                    onChange={e => setInvoiceForm({ ...invoiceForm, montant_total: e.target.value })} required
+                    className="mt-1.5 rounded-xl"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="inv-date">Date d'émission</Label>
+                <Input
+                  id="inv-date" type="date" value={invoiceForm.date_emission}
+                  onChange={e => setInvoiceForm({ ...invoiceForm, date_emission: e.target.value })}
+                  className="mt-1.5 rounded-xl"
+                />
+              </div>
+              {invoiceError && <p className="text-xs text-destructive">{invoiceError}</p>}
+              <DialogFooter>
+                <Button type="submit" disabled={savingInvoice} className="gap-1.5 rounded-xl">
+                  {savingInvoice ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  Créer
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
 
         {/* Summary cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">

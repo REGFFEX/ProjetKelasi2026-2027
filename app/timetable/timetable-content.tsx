@@ -276,6 +276,12 @@ export function TimetableContent() {
           <form onSubmit={handleSave} className="space-y-3">
             <div>
               <Label htmlFor="tt-assignment">Affectation (enseignant · matière · classe) *</Label>
+              {assignments.length === 0 && (
+                <p className="mt-1.5 rounded-xl bg-warning/10 px-3 py-2.5 text-xs text-warning">
+                  Aucune affectation enseignant × matière × classe n'existe encore. Allez d'abord dans
+                  Enseignants → modifier un enseignant pour lui attribuer une matière et une classe.
+                </p>
+              )}
               <select
                 id="tt-assignment"
                 value={form.assignment_id}
