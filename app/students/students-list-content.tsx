@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Search, Plus, Filter, Download, Upload, X, FileSpreadsheet, CheckCircle, AlertCircle, Eye, Pencil, Trash2, GraduationCap, Loader2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -50,10 +51,12 @@ interface StudentParentRow {
 export function StudentsListContent() {
   const { profile } = useAuth();
   const canManage = canWrite(profile?.role, 'students');
+  const searchParams = useSearchParams();
+  const classroomFromUrl = searchParams?.get('classroom') ?? null;
   const [search, setSearch] = useState('');
-  const [classFilter, setClassFilter] = useState('all');
+  const [classFilter, setClassFilter] = useState(classroomFromUrl || 'all');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(!!classroomFromUrl);
   const [showImport, setShowImport] = useState(false);
   const [loading, setLoading] = useState(true);
   const [students, setStudents] = useState<StudentRow[]>([]);

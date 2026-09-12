@@ -12,7 +12,7 @@ const roleAccess: Record<Role, string[]> = {
   school_admin: ['/dashboard', '/students', '/parents', '/teachers', '/classes', '/timetable', '/attendance', '/grades', '/payments', '/hours', '/communication', '/reports', '/settings'],
   secretary: ['/dashboard', '/students', '/parents', '/teachers', '/classes', '/timetable', '/attendance', '/communication', '/settings'],
   accountant: ['/dashboard', '/payments', '/students', '/hours', '/reports'],
-  teacher: ['/dashboard', '/classes', '/timetable', '/attendance', '/grades', '/communication'],
+  teacher: ['/dashboard', '/classes', '/students', '/timetable', '/attendance', '/grades', '/communication'],
   parent: ['/parent', '/communication'],
 };
 

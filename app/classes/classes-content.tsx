@@ -360,7 +360,7 @@ export function ClassesContent() {
                   </p>
                 </div>
 
-                <Link href="/students">
+                <Link href={`/students?classroom=${c.id}`}>
                   <Button variant="outline" size="sm" className="w-full mt-4 rounded-xl active:scale-[0.97] transition-transform">Voir les élèves</Button>
                 </Link>
               </Card>
