@@ -10,6 +10,11 @@ from app.schemas.classrooms import SubjectCreate, SubjectUpdate, SubjectOut
 
 router = APIRouter(prefix="/subjects", tags=["subjects"])
 
+# Deliberately not scoped to the teacher's own assignments like /classrooms is: a
+# subject's name/coefficient is curriculum metadata, not privacy-sensitive, and other
+# screens (e.g. a student's grade history) need to resolve subject names outside the
+# viewing teacher's own subjects. The "Matières" tab narrows what's shown to a teacher
+# on the frontend instead — see app/classes/classes-content.tsx.
 READ_ROLES = (Role.school_admin, Role.secretary, Role.accountant, Role.teacher, Role.parent)
 WRITE_ROLES = (Role.school_admin, Role.secretary)
 

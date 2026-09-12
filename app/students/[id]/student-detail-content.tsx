@@ -25,7 +25,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
-import { canWrite } from '@/lib/permissions';
+import { canWrite, canReadFinancial } from '@/lib/permissions';
 
 const attendanceColors: Record<string, string> = {
   present: 'bg-success/10 text-success',
@@ -44,6 +44,7 @@ const attendanceLabels: Record<string, string> = {
 export function StudentDetailContent({ studentId }: { studentId: string }) {
   const { profile } = useAuth();
   const canManage = canWrite(profile?.role, 'students');
+  const canSeeFinancial = canReadFinancial(profile?.role);
   const [loading, setLoading] = useState(true);
   const [student, setStudent] = useState<Awaited<ReturnType<typeof fetchStudentById>> | null>(null);
   const [parents, setParents] = useState<Awaited<ReturnType<typeof fetchStudentParents>>>([]);
@@ -65,13 +66,13 @@ export function StudentDetailContent({ studentId }: { studentId: string }) {
     let cancelled = false;
     (async () => {
       try {
-        const [s, p, docs, c, inv, pay, att, g, a, sub, t] = await Promise.all([
+        const results = await Promise.allSettled([
           fetchStudentById(studentId),
           fetchStudentParents(studentId),
           fetchStudentDocuments(studentId),
           fetchClassrooms(),
-          fetchInvoices(),
-          fetchPayments(),
+          canSeeFinancial ? fetchInvoices() : Promise.resolve([]),
+          canSeeFinancial ? fetchPayments() : Promise.resolve([]),
           fetchAttendance(),
           fetchGrades(),
           fetchAssessments(),
@@ -79,25 +80,27 @@ export function StudentDetailContent({ studentId }: { studentId: string }) {
           fetchTerms(),
         ]);
         if (cancelled) return;
-        setStudent(s);
-        setParents(p);
-        setDocuments(docs as { id: string; nom: string; type: string; date_ajout: string }[]);
-        setClassrooms(c);
-        setInvoices(inv);
-        setPayments(pay);
-        setAttendance(att);
-        setGrades(g);
-        setAssessments(a);
-        setSubjects(sub);
-        setTerms(t);
-      } catch (e) {
-        console.error('Failed to load student detail:', e);
+        const [s, p, docs, c, inv, pay, att, g, a, sub, t] = results.map(r => (r.status === 'fulfilled' ? r.value : undefined));
+        results.forEach((r, i) => {
+          if (r.status === 'rejected') console.error(`Failed to load student detail (index ${i}):`, r.reason);
+        });
+        if (s) setStudent(s as Awaited<ReturnType<typeof fetchStudentById>>);
+        setParents((p as typeof parents) ?? []);
+        setDocuments((docs as { id: string; nom: string; type: string; date_ajout: string }[]) ?? []);
+        setClassrooms((c as typeof classrooms) ?? []);
+        setInvoices((inv as typeof invoices) ?? []);
+        setPayments((pay as typeof payments) ?? []);
+        setAttendance((att as typeof attendance) ?? []);
+        setGrades((g as typeof grades) ?? []);
+        setAssessments((a as typeof assessments) ?? []);
+        setSubjects((sub as typeof subjects) ?? []);
+        setTerms((t as typeof terms) ?? []);
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [studentId]);
+  }, [studentId, canSeeFinancial]);
 
   const handleDownloadBulletin = async () => {
     if (!student) return;
@@ -223,14 +226,18 @@ export function StudentDetailContent({ studentId }: { studentId: string }) {
             <p className="text-xs text-muted-foreground truncate">Présences</p>
             <p className="text-lg font-bold text-foreground mt-0.5 truncate">{studentAttendance.filter(a => a.statut === 'present').length}<span className="text-sm text-muted-foreground">/{studentAttendance.length}</span></p>
           </div>
-          <div className="min-w-0">
-            <p className="text-xs text-muted-foreground truncate">Total payé</p>
-            <p className="text-lg font-bold text-success mt-0.5 truncate">{formatMoney(totalPaid)}</p>
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs text-muted-foreground truncate">Reste à payer</p>
-            <p className="text-lg font-bold text-destructive mt-0.5 truncate">{formatMoney(totalDue)}</p>
-          </div>
+          {canSeeFinancial && (
+            <>
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground truncate">Total payé</p>
+                <p className="text-lg font-bold text-success mt-0.5 truncate">{formatMoney(totalPaid)}</p>
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground truncate">Reste à payer</p>
+                <p className="text-lg font-bold text-destructive mt-0.5 truncate">{formatMoney(totalDue)}</p>
+              </div>
+            </>
+          )}
         </div>
       </Card>
 
@@ -323,6 +330,7 @@ export function StudentDetailContent({ studentId }: { studentId: string }) {
           </Card>
 
           {/* Payments */}
+          {canSeeFinancial && (
           <Card className="p-4 sm:p-5 rounded-2xl shadow-card hover:shadow-card-hover transition-all duration-300">
             <h3 className="font-semibold text-foreground text-sm sm:text-base mb-4">Paiements</h3>
             {studentInvoices.length > 0 ? (
@@ -351,6 +359,7 @@ export function StudentDetailContent({ studentId }: { studentId: string }) {
               <p className="text-sm text-muted-foreground">Aucune facture</p>
             )}
           </Card>
+          )}
         </div>
 
         {/* Right: parents + documents */}

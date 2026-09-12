@@ -10,6 +10,7 @@ import {
   fetchSubjects,
   fetchCycles,
   fetchLevels,
+  fetchAssignments,
   createClassroom,
   updateClassroom,
   deleteClassroom,
@@ -50,6 +51,7 @@ export function ClassesContent() {
   const [subjects, setSubjects] = useState<Awaited<ReturnType<typeof fetchSubjects>>>([]);
   const [cycles, setCycles] = useState<Awaited<ReturnType<typeof fetchCycles>>>([]);
   const [levels, setLevels] = useState<Awaited<ReturnType<typeof fetchLevels>>>([]);
+  const [myAssignedSubjectIds, setMyAssignedSubjectIds] = useState<Set<string> | null>(null);
 
   const [showClassDialog, setShowClassDialog] = useState(false);
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
@@ -80,6 +82,11 @@ export function ClassesContent() {
         setSubjects(sub);
         setCycles(cyc);
         setLevels(lvl);
+        if (profile?.role === 'teacher') {
+          const assignments = await fetchAssignments();
+          if (cancelled) return;
+          setMyAssignedSubjectIds(new Set(assignments.map(a => a.subject_id)));
+        }
       } catch (e) {
         console.error('Failed to load classes data:', e);
       } finally {
@@ -87,7 +94,11 @@ export function ClassesContent() {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [profile?.role]);
+
+  // A teacher's "Matières" tab only lists what they actually teach — the /subjects
+  // endpoint itself stays unscoped since other screens need every subject's name.
+  const visibleSubjects = myAssignedSubjectIds ? subjects.filter(s => myAssignedSubjectIds.has(s.id)) : subjects;
 
   if (loading) {
     return (
@@ -383,7 +394,7 @@ export function ClassesContent() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {subjects.map(s => (
+                {visibleSubjects.map(s => (
                   <tr key={s.id} className="hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">

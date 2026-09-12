@@ -42,3 +42,15 @@ export function canWrite(role: Role | undefined, resource: WritableResource): bo
   if (!role) return false;
   return (WRITE_ROLES[resource] as readonly Role[]).includes(role);
 }
+
+/**
+ * Mirrors READ_ROLES in backend/app/routers/{invoices,payments}.py. Teachers and
+ * parents can view a student's profile but have no read access to billing data
+ * there — the frontend must not even request it, or the 403 blanks the page.
+ */
+const FINANCIAL_READ_ROLES: readonly Role[] = ['school_admin', 'secretary', 'accountant'];
+
+export function canReadFinancial(role: Role | undefined): boolean {
+  if (!role) return false;
+  return FINANCIAL_READ_ROLES.includes(role);
+}
