@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { ClipboardList, Plus, Eye, CheckCircle, Clock, FileText, Download, Send, ArrowLeft, Save, Loader2, Trash2 } from 'lucide-react';
+import { ClipboardList, Plus, CheckCircle, Clock, FileText, Download, Send, ArrowLeft, Save, Loader2, Trash2 } from 'lucide-react';
 import {
   fetchAssessments,
   fetchSubjects,
@@ -414,9 +414,6 @@ export function GradesContent() {
                         <FileText className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Saisir</span>
                       </Button>
                     )}
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-lg active:scale-95 transition-all">
-                      <Eye className="h-4 w-4" />
-                    </Button>
                     {canManage && status !== 'publie' && (
                       <Button
                         variant="ghost" size="sm"

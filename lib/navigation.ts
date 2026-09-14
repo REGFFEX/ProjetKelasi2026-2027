@@ -50,7 +50,6 @@ export const navItemsByRole: Record<Role, NavItem[]> = {
     { label: 'Mes horaires', href: '/timetable', icon: 'CalendarDays' },
     { label: 'Présences', href: '/attendance', icon: 'CheckSquare' },
     { label: 'Notes', href: '/grades', icon: 'ClipboardList' },
-    { label: 'Communication', href: '/communication', icon: 'MessageSquare' },
   ],
   parent: [
     { label: 'Accueil', href: '/parent', icon: 'Home' },
