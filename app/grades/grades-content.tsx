@@ -363,28 +363,31 @@ export function GradesContent() {
           })}
         </div>
 
-        {/* Bulletin generator */}
-        <Card className="p-4 sm:p-5 rounded-2xl shadow-card">
-          <h3 className="font-semibold text-foreground text-sm sm:text-base mb-1">Génération de bulletins</h3>
-          <p className="text-sm text-muted-foreground mb-4 hidden sm:block">Sélectionnez un élève pour générer son bulletin</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {students.slice(0, 12).map(s => (
-              <button
-                key={s.id}
-                onClick={() => handleViewBulletin(s.id)}
-                className="flex items-center gap-3 p-3 rounded-xl border border-border hover:border-primary hover:bg-primary/5 transition-all text-left active:scale-95"
-              >
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-primary/15 to-info/10 text-primary text-sm font-semibold shrink-0">
-                  {s.prenom[0]}{s.nom[0]}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">{s.prenom} {s.nom}</p>
-                  <p className="text-xs text-muted-foreground truncate hidden sm:block">{getClassroomName(s.classroom_id || '')}</p>
-                </div>
-              </button>
-            ))}
-          </div>
-        </Card>
+        {/* Bulletin generator — a director/secretariat document, not a teacher task;
+            a teacher's job here stops at entering grades (the "Saisir" flow above). */}
+        {profile?.role !== 'teacher' && (
+          <Card className="p-4 sm:p-5 rounded-2xl shadow-card">
+            <h3 className="font-semibold text-foreground text-sm sm:text-base mb-1">Génération de bulletins</h3>
+            <p className="text-sm text-muted-foreground mb-4 hidden sm:block">Sélectionnez un élève pour générer son bulletin</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {students.slice(0, 12).map(s => (
+                <button
+                  key={s.id}
+                  onClick={() => handleViewBulletin(s.id)}
+                  className="flex items-center gap-3 p-3 rounded-xl border border-border hover:border-primary hover:bg-primary/5 transition-all text-left active:scale-95"
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-primary/15 to-info/10 text-primary text-sm font-semibold shrink-0">
+                    {s.prenom[0]}{s.nom[0]}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{s.prenom} {s.nom}</p>
+                    <p className="text-xs text-muted-foreground truncate hidden sm:block">{getClassroomName(s.classroom_id || '')}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </Card>
+        )}
       </div>
     );
   }
