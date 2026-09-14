@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.authz import assert_teacher_scope, get_teacher_classroom_ids, write_audit_log
 from app.db import get_db
 from app.deps import CurrentUser, require_role
-from app.models.operations import Assessment, EvaluationType, Grade
+from app.models.operations import Assessment, EvaluationType, Grade, GradeStatus
 from app.models.user import Role
 from app.response import envelope, APIException
 from app.schemas.grades import (
@@ -69,6 +69,38 @@ def create_assessment(
     db.commit()
     db.refresh(row)
     return envelope(AssessmentOut.model_validate(row).model_dump(), "Évaluation créée.")
+
+
+@router.delete("/assessments/{assessment_id}")
+def delete_assessment(
+    assessment_id: str,
+    current_user: CurrentUser = Depends(require_role(*WRITE_ROLES)),
+    db: Session = Depends(get_db),
+):
+    row = db.get(Assessment, assessment_id)
+    if not row or row.school_id != current_user.school_id:
+        raise APIException(404, "Évaluation introuvable.")
+    assert_teacher_scope(db, current_user, row.classroom_id, row.subject_id)
+
+    has_published_grade = (
+        db.query(Grade)
+        .filter(Grade.assessment_id == row.id, Grade.statut_validation == GradeStatus.publie)
+        .first()
+    )
+    if has_published_grade:
+        raise APIException(409, "Impossible de supprimer une évaluation déjà publiée.")
+
+    write_audit_log(
+        db,
+        current_user,
+        "DELETE_ASSESSMENT",
+        "assessment",
+        row.id,
+        old_value={"libelle": row.libelle, "classroom_id": row.classroom_id, "subject_id": row.subject_id},
+    )
+    db.delete(row)
+    db.commit()
+    return envelope(None, "Évaluation supprimée.")
 
 
 @router.get("/grades")

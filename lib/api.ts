@@ -377,6 +377,7 @@ export interface AssessmentInput {
 
 export const fetchAssessments = () => apiGet<DbAssessment[]>('/assessments');
 export const createAssessment = (assessment: AssessmentInput) => apiPost<DbAssessment>('/assessments', assessment);
+export const deleteAssessment = (id: string) => apiDelete<void>(`/assessments/${id}`);
 
 export interface GradeRecordInput {
   assessment_id: string;

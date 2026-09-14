@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { ClipboardList, Plus, Eye, CheckCircle, Clock, FileText, Download, Send, ArrowLeft, Save, Loader2 } from 'lucide-react';
+import { ClipboardList, Plus, Eye, CheckCircle, Clock, FileText, Download, Send, ArrowLeft, Save, Loader2, Trash2 } from 'lucide-react';
 import {
   fetchAssessments,
   fetchSubjects,
@@ -13,7 +13,9 @@ import {
   fetchEvaluationTypes,
   fetchTerms,
   fetchAssignments,
+  fetchAcademicYears,
   createAssessment,
+  deleteAssessment,
   upsertGrades,
   type AssessmentInput,
 } from '@/lib/api';
@@ -64,9 +66,10 @@ export function GradesContent() {
   const [levels, setLevels] = useState<Awaited<ReturnType<typeof fetchLevels>>>([]);
   const [evaluationTypes, setEvaluationTypes] = useState<Awaited<ReturnType<typeof fetchEvaluationTypes>>>([]);
   const [terms, setTerms] = useState<Awaited<ReturnType<typeof fetchTerms>>>([]);
-  const [myAssignedSubjectIds, setMyAssignedSubjectIds] = useState<Set<string> | null>(null);
+  const [academicYears, setAcademicYears] = useState<Awaited<ReturnType<typeof fetchAcademicYears>>>([]);
+  const [myAssignments, setMyAssignments] = useState<Awaited<ReturnType<typeof fetchAssignments>> | null>(null);
 
-  const emptyAssessmentForm = { libelle: '', subject_id: '', classroom_id: '', term_id: '', evaluation_type_id: '', date: '', coefficient: 1 };
+  const emptyAssessmentForm = { libelle: '', subject_id: '', classroom_id: '', academic_year_id: '', term_id: '', evaluation_type_id: '', date: '', coefficient: 1 };
   const [showCreateAssessment, setShowCreateAssessment] = useState(false);
   const [assessmentForm, setAssessmentForm] = useState(emptyAssessmentForm);
   const [savingAssessment, setSavingAssessment] = useState(false);
@@ -76,7 +79,7 @@ export function GradesContent() {
     let cancelled = false;
     (async () => {
       try {
-        const [a, s, c, st, g, cyc, lvl, et, tm] = await Promise.all([
+        const [a, s, c, st, g, cyc, lvl, et, tm, ay] = await Promise.all([
           fetchAssessments(),
           fetchSubjects(),
           fetchClassrooms(),
@@ -86,6 +89,7 @@ export function GradesContent() {
           fetchLevels(),
           fetchEvaluationTypes(),
           fetchTerms(),
+          fetchAcademicYears(),
         ]);
         if (cancelled) return;
         setAssessments(a);
@@ -97,10 +101,11 @@ export function GradesContent() {
         setLevels(lvl);
         setEvaluationTypes(et);
         setTerms(tm);
+        setAcademicYears(ay);
         if (profile?.role === 'teacher') {
           const assignments = await fetchAssignments();
           if (cancelled) return;
-          setMyAssignedSubjectIds(new Set(assignments.map(as => as.subject_id)));
+          setMyAssignments(assignments);
         }
       } catch (e) {
         console.error('Failed to load grades data:', e);
@@ -114,17 +119,37 @@ export function GradesContent() {
   // A teacher's perimeter on this page is her own assigned subjects — used to narrow
   // both the create dialog's subject dropdown (assert_teacher_scope 403s otherwise)
   // and the "Toutes les matières" filter/list, which mirror the same scope.
+  const myAssignedSubjectIds = useMemo(
+    () => (myAssignments ? new Set(myAssignments.map(as => as.subject_id)) : null),
+    [myAssignments]
+  );
   const mySubjects = myAssignedSubjectIds ? subjects.filter(s => myAssignedSubjectIds.has(s.id)) : subjects;
 
+  // Once a classe is picked in the form, narrow "Matière" further to only what this
+  // teacher actually teaches in that specific classe (a TeacherAssignment pairing),
+  // matching what assert_teacher_scope enforces server-side on create.
+  const formSubjects = useMemo(() => {
+    if (!myAssignments || !assessmentForm.classroom_id) return mySubjects;
+    const subjectIdsForClassroom = new Set(
+      myAssignments.filter(as => as.classroom_id === assessmentForm.classroom_id).map(as => as.subject_id)
+    );
+    return mySubjects.filter(s => subjectIdsForClassroom.has(s.id));
+  }, [myAssignments, assessmentForm.classroom_id, mySubjects]);
+
+  const termsForYear = assessmentForm.academic_year_id
+    ? terms.filter(t => t.academic_year_id === assessmentForm.academic_year_id)
+    : terms;
+
   const openCreateAssessment = () => {
-    setAssessmentForm(emptyAssessmentForm);
+    const activeYear = academicYears.find(y => y.statut === 'active');
+    setAssessmentForm({ ...emptyAssessmentForm, academic_year_id: activeYear?.id || '' });
     setAssessmentError('');
     setShowCreateAssessment(true);
   };
 
   const handleCreateAssessment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!assessmentForm.libelle.trim() || !assessmentForm.subject_id || !assessmentForm.classroom_id || !assessmentForm.term_id || !assessmentForm.date) return;
+    if (!assessmentForm.libelle.trim() || !assessmentForm.subject_id || !assessmentForm.classroom_id || !assessmentForm.academic_year_id || !assessmentForm.term_id || !assessmentForm.date) return;
     setSavingAssessment(true);
     setAssessmentError('');
     try {
@@ -144,6 +169,16 @@ export function GradesContent() {
       setAssessmentError(err instanceof ApiError ? err.message : "Échec de la création de l'évaluation.");
     } finally {
       setSavingAssessment(false);
+    }
+  };
+
+  const handleDeleteAssessment = async (assessmentId: string) => {
+    if (!window.confirm('Supprimer cette évaluation ?')) return;
+    try {
+      await deleteAssessment(assessmentId);
+      setAssessments(prev => prev.filter(a => a.id !== assessmentId));
+    } catch (err) {
+      window.alert(err instanceof ApiError ? err.message : "Échec de la suppression de l'évaluation.");
     }
   };
 
@@ -227,29 +262,48 @@ export function GradesContent() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor="as-subject">Matière *</Label>
-                  <select
-                    id="as-subject" value={assessmentForm.subject_id} onChange={e => setAssessmentForm({ ...assessmentForm, subject_id: e.target.value })} required
-                    className="mt-1.5 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
-                  >
-                    <option value="">Choisir...</option>
-                    {mySubjects.map(s => <option key={s.id} value={s.id}>{s.nom}</option>)}
-                  </select>
-                </div>
-                <div>
                   <Label htmlFor="as-classroom">Classe *</Label>
                   <select
-                    id="as-classroom" value={assessmentForm.classroom_id} onChange={e => setAssessmentForm({ ...assessmentForm, classroom_id: e.target.value })} required
+                    id="as-classroom" value={assessmentForm.classroom_id}
+                    onChange={e => {
+                      const classroom_id = e.target.value;
+                      setAssessmentForm(prev => ({ ...prev, classroom_id, subject_id: '' }));
+                    }}
+                    required
                     className="mt-1.5 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
                   >
                     <option value="">Choisir...</option>
                     {classrooms.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
                   </select>
                 </div>
+                <div>
+                  <Label htmlFor="as-subject">Matière *</Label>
+                  <select
+                    id="as-subject" value={assessmentForm.subject_id} onChange={e => setAssessmentForm({ ...assessmentForm, subject_id: e.target.value })} required
+                    className="mt-1.5 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="">Choisir...</option>
+                    {formSubjects.map(s => <option key={s.id} value={s.id}>{s.nom}</option>)}
+                  </select>
+                </div>
               </div>
-              {terms.length === 0 && (
+              <div>
+                <Label htmlFor="as-year">Année scolaire *</Label>
+                <select
+                  id="as-year" value={assessmentForm.academic_year_id}
+                  onChange={e => setAssessmentForm(prev => ({ ...prev, academic_year_id: e.target.value, term_id: '' }))}
+                  required
+                  className="mt-1.5 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">Choisir...</option>
+                  {academicYears.map(y => (
+                    <option key={y.id} value={y.id}>{y.libelle}{y.statut === 'active' ? ' (en cours)' : ''}</option>
+                  ))}
+                </select>
+              </div>
+              {assessmentForm.academic_year_id && termsForYear.length === 0 && (
                 <div className="rounded-xl bg-warning/10 px-3 py-2.5 text-xs text-warning">
-                  Aucune période scolaire n'existe encore — une évaluation doit être rattachée à une période
+                  Aucune période scolaire n'existe encore pour cette année — une évaluation doit être rattachée à une période
                   (ex: Trimestre 1). Demandez au directeur ou au secrétariat d'en créer une dans
                   Paramètres → Années scolaires avant de continuer.
                 </div>
@@ -259,10 +313,11 @@ export function GradesContent() {
                   <Label htmlFor="as-term">Période *</Label>
                   <select
                     id="as-term" value={assessmentForm.term_id} onChange={e => setAssessmentForm({ ...assessmentForm, term_id: e.target.value })} required
-                    className="mt-1.5 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                    disabled={!assessmentForm.academic_year_id}
+                    className="mt-1.5 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm disabled:opacity-50"
                   >
                     <option value="">Choisir...</option>
-                    {terms.map(t => <option key={t.id} value={t.id}>{t.libelle}</option>)}
+                    {termsForYear.map(t => <option key={t.id} value={t.id}>{t.libelle}</option>)}
                   </select>
                 </div>
                 <div>
@@ -362,6 +417,15 @@ export function GradesContent() {
                     <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-lg active:scale-95 transition-all">
                       <Eye className="h-4 w-4" />
                     </Button>
+                    {canManage && status !== 'publie' && (
+                      <Button
+                        variant="ghost" size="sm"
+                        className="h-8 w-8 p-0 rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10 active:scale-95 transition-all"
+                        onClick={() => handleDeleteAssessment(a.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               </Card>
