@@ -111,10 +111,10 @@ export function GradesContent() {
     return () => { cancelled = true; };
   }, [profile?.role]);
 
-  // A teacher can only create an évaluation for a subject/classroom pair they're
-  // actually assigned to (assert_teacher_scope enforces this server-side) — narrow
-  // the create dialog's subject dropdown so they don't pick one that will 403.
-  const creatableSubjects = myAssignedSubjectIds ? subjects.filter(s => myAssignedSubjectIds.has(s.id)) : subjects;
+  // A teacher's perimeter on this page is her own assigned subjects — used to narrow
+  // both the create dialog's subject dropdown (assert_teacher_scope 403s otherwise)
+  // and the "Toutes les matières" filter/list, which mirror the same scope.
+  const mySubjects = myAssignedSubjectIds ? subjects.filter(s => myAssignedSubjectIds.has(s.id)) : subjects;
 
   const openCreateAssessment = () => {
     setAssessmentForm(emptyAssessmentForm);
@@ -157,13 +157,19 @@ export function GradesContent() {
   const getSubjectName = (id: string) => subjects.find(s => s.id === id)?.nom || 'Inconnu';
   const getClassroomName = (id: string) => classrooms.find(c => c.id === id)?.nom || 'Inconnu';
 
+  // A teacher's évaluations are scoped to her own subjects here — she manages her
+  // own subject's grades, not a colleague's, even inside her own homeroom classroom.
+  const myAssessments = myAssignedSubjectIds
+    ? assessments.filter(a => myAssignedSubjectIds.has(a.subject_id))
+    : assessments;
+
   const filteredAssessments = useMemo(() => {
-    return assessments.filter(a => {
+    return myAssessments.filter(a => {
       const matchClass = selectedClassroom === 'all' || a.classroom_id === selectedClassroom;
       const matchSubject = selectedSubject === 'all' || a.subject_id === selectedSubject;
       return matchClass && matchSubject;
     });
-  }, [assessments, selectedClassroom, selectedSubject]);
+  }, [myAssessments, selectedClassroom, selectedSubject]);
 
   const handleEnterGrades = (assessmentId: string) => {
     setSelectedAssessment(assessmentId);
@@ -227,7 +233,7 @@ export function GradesContent() {
                     className="mt-1.5 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
                   >
                     <option value="">Choisir...</option>
-                    {creatableSubjects.map(s => <option key={s.id} value={s.id}>{s.nom}</option>)}
+                    {mySubjects.map(s => <option key={s.id} value={s.id}>{s.nom}</option>)}
                   </select>
                 </div>
                 <div>
@@ -307,7 +313,7 @@ export function GradesContent() {
             className="rounded-xl border border-input bg-muted/30 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 transition-all"
           >
             <option value="all">Toutes les matières</option>
-            {subjects.map(s => <option key={s.id} value={s.id}>{s.nom}</option>)}
+            {mySubjects.map(s => <option key={s.id} value={s.id}>{s.nom}</option>)}
           </select>
         </div>
 
