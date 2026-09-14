@@ -12,6 +12,7 @@ import {
   fetchLevels,
   fetchEvaluationTypes,
   fetchTerms,
+  fetchAssignments,
   createAssessment,
   upsertGrades,
   type AssessmentInput,
@@ -63,6 +64,7 @@ export function GradesContent() {
   const [levels, setLevels] = useState<Awaited<ReturnType<typeof fetchLevels>>>([]);
   const [evaluationTypes, setEvaluationTypes] = useState<Awaited<ReturnType<typeof fetchEvaluationTypes>>>([]);
   const [terms, setTerms] = useState<Awaited<ReturnType<typeof fetchTerms>>>([]);
+  const [myAssignedSubjectIds, setMyAssignedSubjectIds] = useState<Set<string> | null>(null);
 
   const emptyAssessmentForm = { libelle: '', subject_id: '', classroom_id: '', term_id: '', evaluation_type_id: '', date: '', coefficient: 1 };
   const [showCreateAssessment, setShowCreateAssessment] = useState(false);
@@ -95,6 +97,11 @@ export function GradesContent() {
         setLevels(lvl);
         setEvaluationTypes(et);
         setTerms(tm);
+        if (profile?.role === 'teacher') {
+          const assignments = await fetchAssignments();
+          if (cancelled) return;
+          setMyAssignedSubjectIds(new Set(assignments.map(as => as.subject_id)));
+        }
       } catch (e) {
         console.error('Failed to load grades data:', e);
       } finally {
@@ -102,7 +109,12 @@ export function GradesContent() {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [profile?.role]);
+
+  // A teacher can only create an évaluation for a subject/classroom pair they're
+  // actually assigned to (assert_teacher_scope enforces this server-side) — narrow
+  // the create dialog's subject dropdown so they don't pick one that will 403.
+  const creatableSubjects = myAssignedSubjectIds ? subjects.filter(s => myAssignedSubjectIds.has(s.id)) : subjects;
 
   const openCreateAssessment = () => {
     setAssessmentForm(emptyAssessmentForm);
@@ -215,7 +227,7 @@ export function GradesContent() {
                     className="mt-1.5 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
                   >
                     <option value="">Choisir...</option>
-                    {subjects.map(s => <option key={s.id} value={s.id}>{s.nom}</option>)}
+                    {creatableSubjects.map(s => <option key={s.id} value={s.id}>{s.nom}</option>)}
                   </select>
                 </div>
                 <div>
