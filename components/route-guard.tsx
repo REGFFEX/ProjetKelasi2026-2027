@@ -10,7 +10,7 @@ import type { Role } from '@/lib/types';
 const roleAccess: Record<Role, string[]> = {
   super_admin: ['/schools', '/subscriptions', '/super-admins'],
   school_admin: ['/dashboard', '/students', '/parents', '/teachers', '/classes', '/timetable', '/attendance', '/grades', '/payments', '/hours', '/communication', '/reports', '/settings'],
-  secretary: ['/dashboard', '/students', '/parents', '/teachers', '/classes', '/timetable', '/attendance', '/communication', '/settings'],
+  secretary: ['/dashboard', '/students', '/parents', '/teachers', '/classes', '/timetable', '/attendance', '/grades', '/reports', '/communication', '/settings'],
   accountant: ['/dashboard', '/payments', '/students', '/hours', '/reports'],
   teacher: ['/dashboard', '/classes', '/students', '/timetable', '/attendance', '/grades', '/communication'],
   parent: ['/parent', '/communication'],

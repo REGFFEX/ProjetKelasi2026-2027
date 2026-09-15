@@ -54,3 +54,16 @@ export function canReadFinancial(role: Role | undefined): boolean {
   if (!role) return false;
   return FINANCIAL_READ_ROLES.includes(role);
 }
+
+/**
+ * Mirrors the inline require_role(school_admin, accountant) on GET /reports/export.pdf
+ * in backend/app/routers/reports.py. Secretary reads the financial/attendance/grades
+ * report tabs (their own READ_ROLES already allow that) but can't export that PDF —
+ * hide the button there instead of letting the click 403.
+ */
+const REPORT_EXPORT_ROLES: readonly Role[] = ['school_admin', 'accountant'];
+
+export function canExportReports(role: Role | undefined): boolean {
+  if (!role) return false;
+  return REPORT_EXPORT_ROLES.includes(role);
+}

@@ -9,6 +9,7 @@ import {
 } from '@/lib/api';
 import { ApiError } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
+import { canExportReports } from '@/lib/permissions';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -33,6 +34,7 @@ const PIE_COLORS = ['#22c55e', '#ef4444', '#f59e0b', '#64748b'];
 export function ReportsContent() {
   const { profile } = useAuth();
   const canSeeDeliberation = profile?.role === 'school_admin' || profile?.role === 'secretary';
+  const canExport = canExportReports(profile?.role);
   const [activeReport, setActiveReport] = useState<ReportType>('financial');
   const [dateFrom, setDateFrom] = useState('2026-09-01');
   const [dateTo, setDateTo] = useState(new Date().toISOString().split('T')[0]);
@@ -201,7 +203,7 @@ export function ReportsContent() {
           <h1 className="text-xl sm:text-2xl font-bold text-foreground">Rapports</h1>
           <p className="text-muted-foreground mt-1 truncate">Rapports financiers, de présence et de notes</p>
         </div>
-        {activeReport !== 'deliberation' && (
+        {activeReport !== 'deliberation' && canExport && (
           <Button variant="outline" onClick={handleExportPdf} disabled={exporting} className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform">
             {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} <span className="hidden sm:inline">Exporter PDF</span>
           </Button>
