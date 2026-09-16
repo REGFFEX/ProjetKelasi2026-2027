@@ -28,7 +28,7 @@ const WRITE_ROLES = {
   levels: ['secretary'],
   academic_years: ['secretary'],
   attendance: ['school_admin', 'secretary', 'teacher'],
-  grades: ['school_admin', 'teacher'],
+  grades: ['school_admin', 'secretary', 'teacher'],
   communication: ['school_admin', 'secretary'],
   assignments: ['secretary'],
   timetable: ['secretary'],

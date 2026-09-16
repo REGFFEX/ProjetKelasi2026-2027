@@ -19,7 +19,7 @@ from app.schemas.grades import (
 router = APIRouter(tags=["grades"])
 
 READ_ROLES = (Role.school_admin, Role.secretary, Role.teacher)
-WRITE_ROLES = (Role.school_admin, Role.teacher)
+WRITE_ROLES = (Role.school_admin, Role.secretary, Role.teacher)
 
 
 @router.get("/evaluation-types")
@@ -63,7 +63,10 @@ def create_assessment(
     current_user: CurrentUser = Depends(require_role(*WRITE_ROLES)),
     db: Session = Depends(get_db),
 ):
-    assert_teacher_scope(db, current_user, body.classroom_id, body.subject_id)
+    # Secretary has full cross-class access by design (can create/correct any
+    # teacher's évaluation); teacher stays scoped to their own assignments.
+    if current_user.role == Role.teacher:
+        assert_teacher_scope(db, current_user, body.classroom_id, body.subject_id)
     row = Assessment(school_id=current_user.school_id, **body.model_dump())
     db.add(row)
     db.commit()
@@ -80,7 +83,8 @@ def delete_assessment(
     row = db.get(Assessment, assessment_id)
     if not row or row.school_id != current_user.school_id:
         raise APIException(404, "Évaluation introuvable.")
-    assert_teacher_scope(db, current_user, row.classroom_id, row.subject_id)
+    if current_user.role == Role.teacher:
+        assert_teacher_scope(db, current_user, row.classroom_id, row.subject_id)
 
     has_published_grade = (
         db.query(Grade)
@@ -137,7 +141,8 @@ def upsert_grades(
             assessment = db.get(Assessment, record.assessment_id)
             if not assessment or assessment.school_id != current_user.school_id:
                 raise APIException(404, "Évaluation introuvable.")
-            assert_teacher_scope(db, current_user, assessment.classroom_id, assessment.subject_id)
+            if current_user.role == Role.teacher:
+                assert_teacher_scope(db, current_user, assessment.classroom_id, assessment.subject_id)
             assessment_cache[record.assessment_id] = assessment
 
     result = []
