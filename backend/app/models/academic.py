@@ -52,6 +52,10 @@ class Cycle(Base, UUIDPKMixin, TimestampMixin):
     # Enseignants payés à l'heure sur ce cycle (typiquement collège/lycée, vacataires) —
     # active le suivi des séances (démarrer/terminer) et le rapport d'heures.
     paiement_horaire: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Moyenne générale pondérée par le coefficient de chaque matière (Collège/Lycée) vs
+    # moyenne simple des matières, coefficients ignorés (Primaire, en général) — utilisé
+    # par le bulletin et la délibération de classe pour ce cycle.
+    moyenne_ponderee: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
 class Level(Base, UUIDPKMixin, TimestampMixin):

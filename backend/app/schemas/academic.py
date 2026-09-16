@@ -10,6 +10,7 @@ class CycleCreate(BaseModel):
     ordre: int = 0
     evaluation_mode: EvaluationMode = EvaluationMode.notes
     paiement_horaire: bool = False
+    moyenne_ponderee: bool = True
 
 
 class CycleUpdate(BaseModel):
@@ -17,6 +18,7 @@ class CycleUpdate(BaseModel):
     ordre: int | None = None
     evaluation_mode: EvaluationMode | None = None
     paiement_horaire: bool | None = None
+    moyenne_ponderee: bool | None = None
 
 
 class CycleOut(BaseModel):
@@ -26,6 +28,7 @@ class CycleOut(BaseModel):
     ordre: int
     evaluation_mode: EvaluationMode
     paiement_horaire: bool
+    moyenne_ponderee: bool
 
     model_config = {"from_attributes": True}
 

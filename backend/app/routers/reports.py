@@ -73,6 +73,9 @@ def get_deliberation(
     if not classroom or classroom.school_id != current_user.school_id:
         raise APIException(404, "Classe introuvable.")
 
+    level = db.get(Level, classroom.level_id)
+    cycle = db.get(Cycle, level.cycle_id) if level else None
+
     term = None
     if term_id:
         term = db.get(Term, term_id)
@@ -93,7 +96,7 @@ def get_deliberation(
 
     resultats = []
     for student in students:
-        _, general_avg = _subject_breakdown(db, student, classroom_id, term)
+        _, general_avg = _subject_breakdown(db, student, classroom_id, term, cycle)
         moyenne = round(general_avg, 2) if general_avg is not None else None
         decision = "absent" if moyenne is None else ("admis" if moyenne >= seuil else "echoue")
         resultats.append({

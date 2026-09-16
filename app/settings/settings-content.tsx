@@ -50,7 +50,7 @@ import { cn } from '@/lib/utils';
 
 const emptyYearForm = { libelle: '', date_debut: '', date_fin: '', activate: false };
 const emptyTermForm = { academic_year_id: '', libelle: '', date_debut: '', date_fin: '' };
-const emptyCycleForm = { nom: '', ordre: 0, evaluation_mode: 'notes' as 'notes' | 'qualitatif', paiement_horaire: false };
+const emptyCycleForm = { nom: '', ordre: 0, evaluation_mode: 'notes' as 'notes' | 'qualitatif', paiement_horaire: false, moyenne_ponderee: true };
 const emptyLevelForm = { cycle_id: '', nom: '', ordre: 0 };
 const emptyUserForm = { nom: '', email: '', password: '', telephone: '', role: 'secretary' as 'school_admin' | 'secretary' | 'accountant' | 'teacher' | 'parent' };
 const creatableRoles: { value: 'school_admin' | 'secretary' | 'accountant' | 'teacher' | 'parent'; label: string }[] = [
@@ -347,7 +347,7 @@ export function SettingsContent() {
 
   const openEditCycle = (c: Awaited<ReturnType<typeof fetchCycles>>[number]) => {
     setEditingCycleId(c.id);
-    setCycleForm({ nom: c.nom, ordre: c.ordre, evaluation_mode: c.evaluation_mode, paiement_horaire: c.paiement_horaire });
+    setCycleForm({ nom: c.nom, ordre: c.ordre, evaluation_mode: c.evaluation_mode, paiement_horaire: c.paiement_horaire, moyenne_ponderee: c.moyenne_ponderee });
     setShowCycleDialog(true);
   };
 
@@ -632,6 +632,22 @@ export function SettingsContent() {
                   </select>
                   <p className="text-xs text-muted-foreground mt-1">Le mode qualitatif remplace la saisie de notes par des appréciations libres (ex: préscolaire).</p>
                 </div>
+                <div>
+                  <Label htmlFor="cy-moyenne">Calcul de la moyenne générale</Label>
+                  <select
+                    id="cy-moyenne"
+                    value={cycleForm.moyenne_ponderee ? 'ponderee' : 'simple'}
+                    onChange={e => setCycleForm({ ...cycleForm, moyenne_ponderee: e.target.value === 'ponderee' })}
+                    className="mt-1.5 w-full rounded-xl border border-input bg-muted/30 px-3 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 transition-all"
+                  >
+                    <option value="ponderee">Pondérée par coefficient de matière (Collège/Lycée)</option>
+                    <option value="simple">Moyenne simple des matières (Primaire)</option>
+                  </select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Utilisé pour le bulletin et la délibération de classe de ce cycle. La moyenne pondérée compte
+                    plus les matières à fort coefficient ; la moyenne simple donne le même poids à chaque matière.
+                  </p>
+                </div>
                 <div className="rounded-xl border border-border p-3">
                   <label className="flex items-center gap-2.5 text-sm cursor-pointer">
                     <input
@@ -728,6 +744,9 @@ export function SettingsContent() {
                       <div className="flex flex-wrap gap-1.5 mt-0.5">
                         <Badge variant="secondary" className="badge-modern text-xs">
                           {cycle.evaluation_mode === 'qualitatif' ? 'Appréciations qualitatives' : 'Notes /20'}
+                        </Badge>
+                        <Badge variant="outline" className="badge-modern text-xs">
+                          {cycle.moyenne_ponderee ? 'Moyenne pondérée' : 'Moyenne simple'}
                         </Badge>
                         {cycle.paiement_horaire && (
                           <Badge variant="outline" className="badge-modern text-xs">Paiement à l'heure</Badge>

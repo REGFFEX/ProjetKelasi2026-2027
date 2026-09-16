@@ -21,10 +21,12 @@ PASS_GREEN = colors.HexColor("#2F5F45")
 FAIL_RED = colors.HexColor("#8C3A2B")
 
 
-def _subject_breakdown(db: Session, student: Student, classroom_id: str | None, term: Term | None):
+def _subject_breakdown(db: Session, student: Student, classroom_id: str | None, term: Term | None, cycle: Cycle | None = None):
     """Same weighting formula the app uses everywhere else: per-subject average is
-    grade-weighted by each assessment's own coefficient, then the general average is
-    weighted by the subject's coefficient."""
+    grade-weighted by each assessment's own coefficient. The general average is then
+    weighted by each subject's coefficient (Collège/Lycée) unless the student's cycle
+    has moyenne_ponderee=False, in which case it's a simple average across subjects
+    (typically Primaire, where subjects don't carry a coefficient in practice)."""
     if not classroom_id:
         return [], None
 
@@ -63,13 +65,15 @@ def _subject_breakdown(db: Session, student: Student, classroom_id: str | None, 
         if grade.appreciation:
             bucket["appreciations"].append(grade.appreciation)
 
+    weighted = cycle is None or cycle.moyenne_ponderee
+
     rows = []
     total_points, total_coefs = 0.0, 0
     for data in sorted(per_subject.values(), key=lambda d: d["nom"]):
         avg = data["points"] / data["coefs"] if data["coefs"] else None
         if avg is not None:
-            total_points += avg * data["coef"]
-            total_coefs += data["coef"]
+            total_points += avg * data["coef"] if weighted else avg
+            total_coefs += data["coef"] if weighted else 1
         rows.append({**data, "avg": avg})
 
     general_avg = total_points / total_coefs if total_coefs else None
@@ -99,7 +103,7 @@ def build_bulletin_pdf(db: Session, student: Student, school: School, term: Term
                 if level:
                     cycle = db.get(Cycle, level.cycle_id)
 
-    rows, general_avg = _subject_breakdown(db, student, classroom_id, term)
+    rows, general_avg = _subject_breakdown(db, student, classroom_id, term, cycle)
     is_qualitatif = cycle is not None and cycle.evaluation_mode == EvaluationMode.qualitatif
 
     buf = io.BytesIO()

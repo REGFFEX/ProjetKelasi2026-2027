@@ -55,6 +55,7 @@ export interface DbCycle {
   ordre: number;
   evaluation_mode: 'notes' | 'qualitatif';
   paiement_horaire: boolean;
+  moyenne_ponderee: boolean;
 }
 
 export interface DbLevel {
@@ -263,6 +264,7 @@ export interface CycleInput {
   ordre?: number;
   evaluation_mode?: 'notes' | 'qualitatif';
   paiement_horaire?: boolean;
+  moyenne_ponderee?: boolean;
 }
 
 export const fetchCycles = () => apiGet<DbCycle[]>('/cycles');
