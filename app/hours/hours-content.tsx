@@ -4,6 +4,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { Clock, Download, Loader2, Wallet } from 'lucide-react';
 import { fetchTeachers, fetchHourlyRates, upsertHourlyRate, fetchHoursReport, formatMoney, type TeacherHoursReport } from '@/lib/api';
 import { ApiError } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth-context';
+import { canWrite } from '@/lib/permissions';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +13,12 @@ import { Input } from '@/components/ui/input';
 const MOIS_LABELS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
 export function HoursContent() {
+  const { profile } = useAuth();
+  // Fixer le taux horaire est une tâche de la scolarité (secrétariat) ; suivre les
+  // séances effectuées et payer en conséquence reste le travail du comptable — deux
+  // moitiés de cette page, visibles indépendamment selon qui la consulte.
+  const canManageRates = canWrite(profile?.role, 'hourly_rates');
+  const canSeeReport = profile?.role === 'school_admin' || profile?.role === 'accountant';
   const now = new Date();
   const [loading, setLoading] = useState(true);
   const [teachers, setTeachers] = useState<Awaited<ReturnType<typeof fetchTeachers>>>([]);
@@ -24,6 +32,7 @@ export function HoursContent() {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (!canManageRates) { setLoading(false); return; }
     let cancelled = false;
     (async () => {
       try {
@@ -42,9 +51,10 @@ export function HoursContent() {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [canManageRates]);
 
   useEffect(() => {
+    if (!canSeeReport) return;
     let cancelled = false;
     setReportLoading(true);
     setError('');
@@ -53,7 +63,7 @@ export function HoursContent() {
       .catch(e => { if (!cancelled) setError(e instanceof ApiError ? e.message : 'Échec du chargement.'); })
       .finally(() => { if (!cancelled) setReportLoading(false); });
     return () => { cancelled = true; };
-  }, [mois, annee]);
+  }, [mois, annee, canSeeReport]);
 
   const rateByTeacher = useMemo(() => {
     const map: Record<string, number> = {};
@@ -110,9 +120,16 @@ export function HoursContent() {
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
       <div>
         <h1 className="text-xl sm:text-2xl font-bold text-foreground">Suivi des heures d'enseignement</h1>
-        <p className="text-muted-foreground mt-1">Taux horaires, séances effectuées et montants à payer (enseignants payés à l'heure)</p>
+        <p className="text-muted-foreground mt-1">
+          {canManageRates && canSeeReport
+            ? "Taux horaires, séances effectuées et montants à payer (enseignants payés à l'heure)"
+            : canManageRates
+            ? "Configurez le taux horaire de chaque enseignant payé à l'heure."
+            : "Séances effectuées et montants à payer (enseignants payés à l'heure)."}
+        </p>
       </div>
 
+      {canManageRates && (
       <Card className="p-4 sm:p-5 rounded-2xl shadow-card">
         <h3 className="font-semibold text-foreground mb-4">Taux horaire par enseignant</h3>
         <div className="space-y-2 max-h-[300px] overflow-y-auto scrollbar-thin">
@@ -139,7 +156,10 @@ export function HoursContent() {
           ))}
         </div>
       </Card>
+      )}
 
+      {canSeeReport && (
+      <>
       <Card className="p-4 sm:p-5 rounded-2xl shadow-card">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="flex flex-wrap items-end gap-3">
@@ -225,6 +245,8 @@ export function HoursContent() {
           </Card>
         </>
       ) : null}
+      </>
+      )}
     </div>
   );
 }

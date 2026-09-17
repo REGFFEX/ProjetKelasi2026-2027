@@ -35,6 +35,7 @@ export const navItemsByRole: Record<Role, NavItem[]> = {
     { label: 'Emploi du temps', href: '/timetable', icon: 'CalendarDays' },
     { label: 'Présences', href: '/attendance', icon: 'CheckSquare' },
     { label: 'Notes', href: '/grades', icon: 'ClipboardList' },
+    { label: 'Suivi des heures', href: '/hours', icon: 'Clock' },
     { label: 'Rapports', href: '/reports', icon: 'BarChart3' },
     { label: 'Communication', href: '/communication', icon: 'MessageSquare' },
     { label: 'Paramètres', href: '/settings', icon: 'Settings' },

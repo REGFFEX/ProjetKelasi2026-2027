@@ -22,7 +22,11 @@ from app.schemas.teaching_sessions import (
 
 router = APIRouter(prefix="/teaching-sessions", tags=["teaching-sessions"])
 
-MANAGE_ROLES = (Role.school_admin, Role.accountant)
+# Fixer le taux horaire d'un enseignant est une tâche de la scolarité (secrétariat) —
+# le comptable, lui, se contente de suivre les heures effectuées et de payer en
+# conséquence. Deux tuples distincts pour ne pas mélanger les deux responsabilités.
+RATE_ROLES = (Role.school_admin, Role.secretary)
+REPORT_ROLES = (Role.school_admin, Role.accountant)
 
 
 def _slot_assignment_and_classroom(db: Session, school_id: str, slot_id: str) -> tuple[TimetableSlot, TeacherAssignment, Classroom]:
@@ -47,7 +51,7 @@ def _is_hourly_paid(db: Session, classroom: Classroom) -> bool:
 @router.get("/rates")
 def list_hourly_rates(
     academic_year_id: str | None = None,
-    current_user: CurrentUser = Depends(require_role(*MANAGE_ROLES)),
+    current_user: CurrentUser = Depends(require_role(*RATE_ROLES)),
     db: Session = Depends(get_db),
 ):
     year_id = academic_year_id or get_active_academic_year(db, current_user.school_id).id
@@ -62,7 +66,7 @@ def list_hourly_rates(
 @router.post("/rates")
 def upsert_hourly_rate(
     body: HourlyRateUpsert,
-    current_user: CurrentUser = Depends(require_role(*MANAGE_ROLES)),
+    current_user: CurrentUser = Depends(require_role(*RATE_ROLES)),
     db: Session = Depends(get_db),
 ):
     year_id = body.academic_year_id or get_active_academic_year(db, current_user.school_id).id
@@ -238,7 +242,7 @@ def compute_hours_report(db: Session, school_id: str, month: int, year_num: int)
 def get_hours_report(
     mois: int = Query(default=None),
     annee: int = Query(default=None),
-    current_user: CurrentUser = Depends(require_role(*MANAGE_ROLES)),
+    current_user: CurrentUser = Depends(require_role(*REPORT_ROLES)),
     db: Session = Depends(get_db),
 ):
     today = date.today()

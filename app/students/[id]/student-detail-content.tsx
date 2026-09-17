@@ -25,7 +25,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
-import { canWrite, canReadFinancial } from '@/lib/permissions';
+import { canWrite, canReadFinancial, canSeeAcademicRecord, canManageStudentDocuments } from '@/lib/permissions';
 
 const attendanceColors: Record<string, string> = {
   present: 'bg-success/10 text-success',
@@ -45,6 +45,8 @@ export function StudentDetailContent({ studentId }: { studentId: string }) {
   const { profile } = useAuth();
   const canManage = canWrite(profile?.role, 'students');
   const canSeeFinancial = canReadFinancial(profile?.role);
+  const canSeeAcademic = canSeeAcademicRecord(profile?.role);
+  const canGenerateDocs = canManageStudentDocuments(profile?.role);
   const [loading, setLoading] = useState(true);
   const [student, setStudent] = useState<Awaited<ReturnType<typeof fetchStudentById>> | null>(null);
   const [parents, setParents] = useState<Awaited<ReturnType<typeof fetchStudentParents>>>([]);
@@ -73,9 +75,9 @@ export function StudentDetailContent({ studentId }: { studentId: string }) {
           fetchClassrooms(),
           canSeeFinancial ? fetchInvoices() : Promise.resolve([]),
           canSeeFinancial ? fetchPayments() : Promise.resolve([]),
-          fetchAttendance(),
-          fetchGrades(),
-          fetchAssessments(),
+          canSeeAcademic ? fetchAttendance() : Promise.resolve([]),
+          canSeeAcademic ? fetchGrades() : Promise.resolve([]),
+          canSeeAcademic ? fetchAssessments() : Promise.resolve([]),
           fetchSubjects(),
           fetchTerms(),
         ]);
@@ -100,7 +102,7 @@ export function StudentDetailContent({ studentId }: { studentId: string }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [studentId, canSeeFinancial]);
+  }, [studentId, canSeeFinancial, canSeeAcademic]);
 
   const handleDownloadBulletin = async () => {
     if (!student) return;
@@ -218,14 +220,18 @@ export function StudentDetailContent({ studentId }: { studentId: string }) {
 
         {/* Quick stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mt-5 sm:mt-6 pt-5 sm:pt-6 border-t border-border">
-          <div className="min-w-0">
-            <p className="text-xs text-muted-foreground truncate">Moyenne générale</p>
-            <p className="text-lg font-bold text-foreground mt-0.5 truncate">{avgGrade}<span className="text-sm text-muted-foreground">/20</span></p>
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs text-muted-foreground truncate">Présences</p>
-            <p className="text-lg font-bold text-foreground mt-0.5 truncate">{studentAttendance.filter(a => a.statut === 'present').length}<span className="text-sm text-muted-foreground">/{studentAttendance.length}</span></p>
-          </div>
+          {canSeeAcademic && (
+            <>
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground truncate">Moyenne générale</p>
+                <p className="text-lg font-bold text-foreground mt-0.5 truncate">{avgGrade}<span className="text-sm text-muted-foreground">/20</span></p>
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground truncate">Présences</p>
+                <p className="text-lg font-bold text-foreground mt-0.5 truncate">{studentAttendance.filter(a => a.statut === 'present').length}<span className="text-sm text-muted-foreground">/{studentAttendance.length}</span></p>
+              </div>
+            </>
+          )}
           {canSeeFinancial && (
             <>
               <div className="min-w-0">
@@ -276,6 +282,7 @@ export function StudentDetailContent({ studentId }: { studentId: string }) {
           </Card>
 
           {/* Attendance */}
+          {canSeeAcademic && (
           <Card className="p-4 sm:p-5 rounded-2xl shadow-card hover:shadow-card-hover transition-all duration-300">
             <h3 className="font-semibold text-foreground text-sm sm:text-base mb-4">Présences récentes</h3>
             {studentAttendance.length > 0 ? (
@@ -293,8 +300,10 @@ export function StudentDetailContent({ studentId }: { studentId: string }) {
               <p className="text-sm text-muted-foreground">Aucune présence enregistrée</p>
             )}
           </Card>
+          )}
 
           {/* Grades */}
+          {canSeeAcademic && (
           <Card className="p-4 sm:p-5 rounded-2xl shadow-card hover:shadow-card-hover transition-all duration-300">
             <h3 className="font-semibold text-foreground text-sm sm:text-base mb-4">Notes</h3>
             {studentGrades.length > 0 ? (
@@ -328,6 +337,7 @@ export function StudentDetailContent({ studentId }: { studentId: string }) {
               <p className="text-sm text-muted-foreground">Aucune note enregistrée</p>
             )}
           </Card>
+          )}
 
           {/* Payments */}
           {canSeeFinancial && (
@@ -387,6 +397,7 @@ export function StudentDetailContent({ studentId }: { studentId: string }) {
             </div>
           </Card>
 
+          {canGenerateDocs && (
           <Card className="p-4 sm:p-5 rounded-2xl shadow-card hover:shadow-card-hover transition-all duration-300">
             <h3 className="font-semibold text-foreground text-sm sm:text-base mb-4">Documents</h3>
             <div className="space-y-1.5 max-h-[280px] overflow-y-auto scrollbar-thin">
@@ -438,6 +449,7 @@ export function StudentDetailContent({ studentId }: { studentId: string }) {
               </Button>
             </div>
           </Card>
+          )}
         </div>
       </div>
     </div>
