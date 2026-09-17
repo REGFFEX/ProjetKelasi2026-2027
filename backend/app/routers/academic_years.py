@@ -11,7 +11,7 @@ from app.schemas.academic import AcademicYearCreate, AcademicYearOut, TermCreate
 
 router = APIRouter(prefix="/academic-years", tags=["academic-years"])
 
-READ_ROLES = (Role.school_admin, Role.secretary, Role.accountant, Role.teacher)
+READ_ROLES = (Role.school_admin, Role.secretary, Role.accountant, Role.teacher, Role.parent)
 WRITE_ROLES = (Role.school_admin, Role.secretary)
 
 

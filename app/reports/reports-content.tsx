@@ -35,6 +35,14 @@ export function ReportsContent() {
   const { profile } = useAuth();
   const canSeeDeliberation = profile?.role === 'school_admin' || profile?.role === 'secretary';
   const canExport = canExportReports(profile?.role);
+  // Mirrors READ_ROLES in backend/app/routers/{attendance,grades}.py — accountant can't
+  // read either, so the Présence/Notes tabs must not even be offered to her, and the
+  // shared Promise.all below must not bundle those calls with the financial ones (a
+  // 403 there would otherwise reject the whole batch and blank the financial report too).
+  const canReadAttendanceAndGrades = profile?.role === 'school_admin' || profile?.role === 'secretary';
+  const visibleReportTypes = canReadAttendanceAndGrades
+    ? reportTypes
+    : reportTypes.filter(rt => rt.id === 'financial');
   const [activeReport, setActiveReport] = useState<ReportType>('financial');
   const [dateFrom, setDateFrom] = useState('2026-09-01');
   const [dateTo, setDateTo] = useState(new Date().toISOString().split('T')[0]);
@@ -64,9 +72,9 @@ export function ReportsContent() {
         const [inv, pay, att, g, a, s, c, t] = await Promise.all([
           fetchInvoices(),
           fetchPayments(),
-          fetchAttendance(),
-          fetchGrades(),
-          fetchAssessments(),
+          canReadAttendanceAndGrades ? fetchAttendance() : Promise.resolve([]),
+          canReadAttendanceAndGrades ? fetchGrades() : Promise.resolve([]),
+          canReadAttendanceAndGrades ? fetchAssessments() : Promise.resolve([]),
           fetchStudents(),
           fetchClassrooms(),
           fetchTerms(),
@@ -88,7 +96,7 @@ export function ReportsContent() {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [canReadAttendanceAndGrades]);
 
   useEffect(() => {
     if (activeReport !== 'deliberation' || !delibClassroomId) return;
@@ -212,7 +220,7 @@ export function ReportsContent() {
 
       {/* Report type selector */}
       <div className={cn('grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4', canSeeDeliberation && 'lg:grid-cols-4')}>
-        {reportTypes.map(rt => {
+        {visibleReportTypes.map(rt => {
           const Icon = rt.icon;
           return (
             <button
