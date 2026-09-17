@@ -361,6 +361,7 @@ function OperationalDashboardContent() {
           </div>
         </Card>
 
+        {canTakeAttendance && (
         <Card className="p-4 sm:p-5 shadow-card">
           <div className="flex items-center justify-between mb-4">
             <div className="min-w-0">
@@ -387,6 +388,7 @@ function OperationalDashboardContent() {
             </ResponsiveContainer>
           </div>
         </Card>
+        )}
       </div>
 
       {/* Bottom row */}
