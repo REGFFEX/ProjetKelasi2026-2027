@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { formatMoney, fetchStudents, fetchAttendance, fetchInvoices, fetchPayments, fetchClassrooms, fetchLevels, fetchNotifications } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
+import { canWrite } from '@/lib/permissions';
 import { DirectorDashboardContent } from './director-dashboard-content';
 import { TeacherHomeContent } from './teacher-home-content';
 import type { Role } from '@/lib/types';
@@ -63,6 +64,8 @@ export function DashboardContent() {
 
 function OperationalDashboardContent() {
   const { profile } = useAuth();
+  const canTakeAttendance = canWrite(profile?.role, 'attendance');
+  const canEnrollStudent = canWrite(profile?.role, 'students');
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -284,16 +287,20 @@ function OperationalDashboardContent() {
           <p className="text-sm text-muted-foreground mt-0.5 truncate">{roleSubtitle[currentRole]} · {new Date().toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
         </div>
         <div className="flex flex-wrap gap-2 shrink-0">
-          <Link href="/attendance">
-            <Button variant="outline" size="sm" className="gap-1.5 rounded-xl">
-              <CheckSquare className="h-4 w-4" /> <span className="hidden sm:inline">Faire l'appel</span><CheckSquare className="h-4 w-4 sm:hidden" />
-            </Button>
-          </Link>
-          <Link href="/students/new">
-            <Button size="sm" className="gap-1.5 rounded-xl">
-              <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Inscrire un élève</span><span className="sm:hidden">Élève</span>
-            </Button>
-          </Link>
+          {canTakeAttendance && (
+            <Link href="/attendance">
+              <Button variant="outline" size="sm" className="gap-1.5 rounded-xl">
+                <CheckSquare className="h-4 w-4" /> <span className="hidden sm:inline">Faire l'appel</span><CheckSquare className="h-4 w-4 sm:hidden" />
+              </Button>
+            </Link>
+          )}
+          {canEnrollStudent && (
+            <Link href="/students/new">
+              <Button size="sm" className="gap-1.5 rounded-xl">
+                <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Inscrire un élève</span><span className="sm:hidden">Élève</span>
+              </Button>
+            </Link>
+          )}
         </div>
       </div>
 
