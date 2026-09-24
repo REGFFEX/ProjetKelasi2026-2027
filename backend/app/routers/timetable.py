@@ -5,7 +5,7 @@ from app.authz import get_teacher_row, write_audit_log
 from app.db import get_db
 from app.deps import CurrentUser, require_role
 from app.models.operations import TimetableSlot
-from app.models.people import TeacherAssignment
+from app.models.people import Classroom, Teacher, TeacherAssignment
 from app.models.user import Role
 from app.response import envelope, APIException
 from app.schemas.timetable import TimetableSlotCreate, TimetableSlotUpdate, TimetableSlotOut
@@ -48,7 +48,14 @@ def _assert_no_overlap(
         if other.teacher_id == assignment.teacher_id:
             raise APIException(409, "Cet enseignant a déjà un cours sur ce créneau.")
         if other.classroom_id == assignment.classroom_id:
-            raise APIException(409, "Cette classe a déjà un cours sur ce créneau.")
+            classroom = db.get(Classroom, other.classroom_id)
+            teacher = db.get(Teacher, other.teacher_id)
+            who = f"{teacher.prenom} {teacher.nom}" if teacher else "un autre enseignant"
+            where = classroom.nom if classroom else "Cette classe"
+            raise APIException(
+                409,
+                f"Conflit d'horaire : {where} · {slot.heure_debut.strftime('%H:%M')} est déjà attribué à {who}.",
+            )
 
 
 @router.get("")

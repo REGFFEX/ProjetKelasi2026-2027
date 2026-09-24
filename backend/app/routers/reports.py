@@ -128,6 +128,7 @@ def get_deliberation(
         "nb_echoue": sum(1 for r in resultats if r["decision"] == "echoue"),
         "nb_absent": sum(1 for r in resultats if r["decision"] == "absent"),
         "moyenne_classe": round(sum(moyennes) / len(moyennes), 2) if moyennes else None,
+        "moyenne_ponderee": cycle.moyenne_ponderee if cycle else True,
     })
 
 

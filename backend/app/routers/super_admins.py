@@ -35,8 +35,8 @@ def create_super_admin(
     db: Session = Depends(get_db),
 ):
     # Platform accounts (school_id NULL) aren't covered by the per-school unique constraint.
-    if db.query(User).filter(User.school_id.is_(None), User.email == body.email).first():
-        raise APIException(409, "Un compte plateforme avec cet email existe déjà.")
+    if db.query(User).filter(User.email == body.email).first():
+        raise APIException(409, "Un compte utilise déjà cet email sur la plateforme.")
 
     user = User(
         school_id=None,

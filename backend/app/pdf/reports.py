@@ -188,7 +188,5 @@ def build_report_pdf(
         else:
             elements.append(Paragraph("Aucune note enregistrée pour cette période.", ParagraphStyle("empty", fontName="Helvetica", fontSize=10, textColor=INK_SOFT)))
 
-    elements += [Spacer(1, 16 * mm), Paragraph(f"Document généré le {date.today().strftime('%d/%m/%Y')} par Kelasi.", ParagraphStyle("footer", fontName="Helvetica", fontSize=9, textColor=INK_SOFT))]
-
     doc.build(elements)
     return buf.getvalue()

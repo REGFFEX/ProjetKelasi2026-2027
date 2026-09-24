@@ -21,6 +21,7 @@ import {
 } from '@/lib/api';
 import { ApiError } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
+import { assetUrl } from '@/lib/api-client';
 import { canWrite } from '@/lib/permissions';
 
 interface StudentRow {
@@ -28,6 +29,7 @@ interface StudentRow {
   matricule: string;
   nom: string;
   prenom: string;
+  photo?: string | null;
   date_naissance: string;
   classroom_id: string | null;
   statut: string;
@@ -252,9 +254,13 @@ export function StudentsListContent() {
                   <tr key={s.id} className="hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-primary/15 to-info/10 text-primary text-xs font-semibold shrink-0">
-                          {s.prenom[0]}{s.nom[0]}
-                        </div>
+                        {s.photo ? (
+                          <img src={assetUrl(s.photo)} alt="" className="h-9 w-9 rounded-full object-cover shrink-0 border border-border" />
+                        ) : (
+                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-primary/15 to-info/10 text-primary text-xs font-semibold shrink-0">
+                            {s.prenom[0]}{s.nom[0]}
+                          </div>
+                        )}
                         <div className="min-w-0">
                           <Link href={`/students/${s.id}`} className="text-sm font-medium text-foreground hover:text-primary truncate block max-w-[180px]">
                             {s.prenom} {s.nom}
@@ -314,9 +320,13 @@ export function StudentsListContent() {
           return (
             <Card key={s.id} className="p-4 shadow-card">
               <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-primary/15 to-info/10 text-primary text-sm font-semibold shrink-0">
-                  {s.prenom[0]}{s.nom[0]}
-                </div>
+                {s.photo ? (
+                  <img src={assetUrl(s.photo)} alt="" className="h-10 w-10 rounded-full object-cover shrink-0 border border-border" />
+                ) : (
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-primary/15 to-info/10 text-primary text-sm font-semibold shrink-0">
+                    {s.prenom[0]}{s.nom[0]}
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <Link href={`/students/${s.id}`}>
                     <p className="text-sm font-medium text-foreground truncate">{s.prenom} {s.nom}</p>

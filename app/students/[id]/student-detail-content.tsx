@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
+import { assetUrl } from '@/lib/api-client';
 import { canWrite, canReadFinancial, canSeeAcademicRecord, canManageStudentDocuments } from '@/lib/permissions';
 
 const attendanceColors: Record<string, string> = {
@@ -187,9 +188,13 @@ export function StudentDetailContent({ studentId }: { studentId: string }) {
       {/* Header card */}
       <Card className="p-4 sm:p-6 rounded-2xl shadow-card hover:shadow-card-hover transition-all duration-300">
         <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/15 to-info/10 text-primary text-xl font-bold shrink-0">
-            {student.prenom[0]}{student.nom[0]}
-          </div>
+          {student.photo ? (
+            <img src={assetUrl(student.photo)} alt={`Photo de ${student.prenom} ${student.nom}`} className="h-16 w-16 rounded-2xl object-cover shrink-0 border border-border" />
+          ) : (
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/15 to-info/10 text-primary text-xl font-bold shrink-0">
+              {student.prenom[0]}{student.nom[0]}
+            </div>
+          )}
           <div className="flex-1 min-w-0">
             <h1 className="text-xl sm:text-2xl font-bold text-foreground truncate">{student.prenom} {student.nom}</h1>
             <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1.5">

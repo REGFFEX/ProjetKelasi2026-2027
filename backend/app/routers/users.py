@@ -39,8 +39,8 @@ def create_user(
 ):
     if body.role not in ADMIN_MANAGEABLE_ROLES:
         raise APIException(403, "Ce rôle ne peut pas être créé depuis ce panneau.")
-    if db.query(User).filter(User.school_id == current_user.school_id, User.email == body.email).first():
-        raise APIException(409, "Un compte avec cet email existe déjà dans cette école.")
+    if db.query(User).filter(User.email == body.email).first():
+        raise APIException(409, "Un compte utilise déjà cet email sur la plateforme. Choisissez une autre adresse.")
 
     user = User(
         school_id=current_user.school_id,

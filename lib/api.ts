@@ -646,6 +646,7 @@ export interface DeliberationReport {
   nb_echoue: number;
   nb_absent: number;
   moyenne_classe: number | null;
+  moyenne_ponderee: boolean;
 }
 
 export const fetchDeliberation = (classroomId: string, termId?: string, seuil = 10) => {

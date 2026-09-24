@@ -540,6 +540,22 @@ export function ReportsContent() {
             </div>
           </Card>
 
+          {deliberation && (
+            <Card className="p-4 sm:p-5 rounded-2xl shadow-card bg-info/5 border-info/20">
+              <h3 className="text-sm font-semibold text-foreground">Comment la moyenne est calculée</h3>
+              <ol className="mt-2 space-y-1 text-sm text-muted-foreground list-decimal pl-5">
+                <li>Dans chaque matière : moyenne des évaluations pondérée par le <span className="font-medium text-foreground">coefficient de chaque évaluation</span> (ex : un examen coef. 2 pèse le double d'une interrogation coef. 1).</li>
+                <li>
+                  {deliberation.moyenne_ponderee
+                    ? <>Moyenne générale : moyenne des matières pondérée par le <span className="font-medium text-foreground">coefficient de chaque matière</span> (mode Collège/Lycée de ce cycle).</>
+                    : <>Moyenne générale : <span className="font-medium text-foreground">moyenne simple</span> des matières, sans coefficient — chaque matière pèse pareil (mode Primaire de ce cycle).</>}
+                </li>
+                <li>Décision : « Admis » si la moyenne atteint le seuil d'admission ({deliberation.seuil}/20), « Échoué » sinon ; « Absent » = aucune note. Le rang classe les admis du meilleur au moins bon.</li>
+                <li>Seules les matières ayant au moins une note comptent. Ce mode se règle par cycle dans Paramètres → Cycles &amp; Niveaux.</li>
+              </ol>
+            </Card>
+          )}
+
           {delibLoading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />

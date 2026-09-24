@@ -40,10 +40,12 @@ export function HoursContent() {
         if (cancelled) return;
         setTeachers(t);
         setRates(r);
-        // Pre-fill each teacher's field with their real current rate — showing it
-        // only as a placeholder left "Enregistrer" disabled until re-typed, which
-        // read as a dead button for anyone just confirming an existing rate.
-        setRateDrafts(Object.fromEntries(r.map(rate => [rate.teacher_id, String(rate.taux)])));
+        // Every teacher starts with a real value (their current rate, or 0 if none yet)
+        // rather than an empty field — an empty field left "Enregistrer" disabled with no
+        // explanation, which read as a dead button.
+        const drafts: Record<string, string> = Object.fromEntries(t.map(teacher => [teacher.id, '0']));
+        r.forEach(rate => { drafts[rate.teacher_id] = String(rate.taux); });
+        setRateDrafts(drafts);
       } catch (e) {
         console.error('Failed to load hours data:', e);
       } finally {

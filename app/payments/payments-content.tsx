@@ -65,6 +65,7 @@ export function PaymentsContent() {
   const [submittingPayment, setSubmittingPayment] = useState(false);
   const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
   const [invoiceForm, setInvoiceForm] = useState(emptyInvoiceForm);
+  const [studentQuery, setStudentQuery] = useState('');
   const [savingInvoice, setSavingInvoice] = useState(false);
   const [invoiceError, setInvoiceError] = useState('');
 
@@ -98,6 +99,14 @@ export function PaymentsContent() {
     return () => { cancelled = true; };
   }, []);
 
+  const studentMatches = useMemo(() => {
+    const q = studentQuery.trim().toLowerCase();
+    const list = q
+      ? students.filter(s => `${s.prenom} ${s.nom} ${s.nom} ${s.prenom} ${s.matricule}`.toLowerCase().includes(q))
+      : students;
+    return list.slice(0, 30);
+  }, [students, studentQuery]);
+
   const getStudentName = (id: string) => {
     const s = students.find(s => s.id === id);
     return s ? `${s.prenom} ${s.nom}` : 'Inconnu';
@@ -127,7 +136,8 @@ export function PaymentsContent() {
   const handleCreateInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
     const montant = parseFloat(invoiceForm.montant_total);
-    if (!invoiceForm.student_id || !montant || montant <= 0) return;
+    if (!invoiceForm.student_id) { setInvoiceError('Choisissez un élève dans la liste.'); return; }
+    if (!montant || montant <= 0) return;
     setSavingInvoice(true);
     setInvoiceError('');
     try {
@@ -140,6 +150,7 @@ export function PaymentsContent() {
       setInvoices(prev => [created, ...prev]);
       setShowInvoiceDialog(false);
       setInvoiceForm(emptyInvoiceForm);
+      setStudentQuery('');
     } catch (err) {
       setInvoiceError(err instanceof ApiError ? err.message : "Échec de la création de la facture.");
     } finally {
@@ -171,7 +182,7 @@ export function PaymentsContent() {
           )}
         </div>
 
-        <Dialog open={showInvoiceDialog} onOpenChange={(open) => { setShowInvoiceDialog(open); if (!open) { setInvoiceForm(emptyInvoiceForm); setInvoiceError(''); } }}>
+        <Dialog open={showInvoiceDialog} onOpenChange={(open) => { setShowInvoiceDialog(open); if (!open) { setInvoiceForm(emptyInvoiceForm); setInvoiceError(''); setStudentQuery(''); } }}>
           <DialogContent className="rounded-2xl">
             <DialogHeader>
               <DialogTitle>Nouvelle facture</DialogTitle>
@@ -179,13 +190,43 @@ export function PaymentsContent() {
             <form onSubmit={handleCreateInvoice} className="space-y-3">
               <div>
                 <Label htmlFor="inv-student">Élève *</Label>
-                <select
-                  id="inv-student" value={invoiceForm.student_id} onChange={e => setInvoiceForm({ ...invoiceForm, student_id: e.target.value })} required
-                  className="mt-1.5 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
-                >
-                  <option value="">Choisir un élève...</option>
-                  {students.map(s => <option key={s.id} value={s.id}>{s.prenom} {s.nom} — {s.matricule}</option>)}
-                </select>
+                {invoiceForm.student_id ? (
+                  <div className="mt-1.5 flex items-center justify-between gap-3 rounded-xl border border-input bg-muted/30 px-3 py-2 text-sm">
+                    <span className="truncate font-medium text-foreground">{getStudentName(invoiceForm.student_id)}</span>
+                    <button
+                      type="button"
+                      onClick={() => { setInvoiceForm({ ...invoiceForm, student_id: '' }); setStudentQuery(''); }}
+                      className="shrink-0 text-xs font-medium text-primary hover:underline"
+                    >
+                      Changer
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-1.5">
+                    <Input
+                      id="inv-student" value={studentQuery} onChange={e => setStudentQuery(e.target.value)}
+                      placeholder="Rechercher par nom, prénom ou matricule…" autoComplete="off" className="rounded-xl"
+                    />
+                    <div className="mt-1.5 max-h-48 overflow-y-auto rounded-xl border border-border bg-background scrollbar-thin">
+                      {studentMatches.map(s => (
+                        <button
+                          key={s.id} type="button"
+                          onClick={() => setInvoiceForm({ ...invoiceForm, student_id: s.id })}
+                          className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-muted/50 transition-colors"
+                        >
+                          <span className="truncate">{s.prenom} {s.nom}</span>
+                          <span className="shrink-0 font-mono text-xs text-muted-foreground">{s.matricule}</span>
+                        </button>
+                      ))}
+                      {studentMatches.length === 0 && (
+                        <p className="px-3 py-3 text-sm text-muted-foreground">Aucun élève trouvé.</p>
+                      )}
+                    </div>
+                    {studentQuery.trim() === '' && students.length > 8 && (
+                      <p className="mt-1 text-xs text-muted-foreground">{students.length} élèves — tapez pour affiner.</p>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>

@@ -140,3 +140,32 @@ def test_write_requires_school_admin_or_secretary(client, db_session):
         json={"assignment_id": assignment["id"], "jour": "jeudi", "heure_debut": "08:00:00", "heure_fin": "09:00:00"},
     )
     assert resp.status_code == 403
+
+
+def test_overlap_same_classroom_different_teacher_rejected(client, db_session):
+    school = setup_school_admin(client, db_session, email="admin.tt.classroom@test.cd")
+    level_id = make_level(db_session, school)
+    assignment_a, classroom, _ = make_assignment(client, db_session, school, level_id, "profa.tt@test.cd")
+
+    subject_b = client.post("/api/v1/subjects", json={"nom": "Francais", "coefficient": 2}).json()["data"]
+    teacher_b = client.post(
+        "/api/v1/teachers",
+        json={"nom": "Prof", "prenom": "Deux", "email": "profb.tt@test.cd", "telephone": "", "assignments": []},
+    ).json()["data"]
+    assignment_b = client.post(
+        "/api/v1/assignments",
+        json={"teacher_id": teacher_b["id"], "subject_id": subject_b["id"], "classroom_id": classroom["id"]},
+    ).json()["data"]
+
+    ok = client.post(
+        "/api/v1/timetable",
+        json={"assignment_id": assignment_a["id"], "jour": "lundi", "heure_debut": "08:00:00", "heure_fin": "09:00:00"},
+    )
+    assert ok.status_code == 200
+    resp = client.post(
+        "/api/v1/timetable",
+        json={"assignment_id": assignment_b["id"], "jour": "lundi", "heure_debut": "08:00:00", "heure_fin": "09:00:00"},
+    )
+    assert resp.status_code == 409
+    assert "Un Prof" in resp.json()["message"]
+    assert "08:00" in resp.json()["message"]

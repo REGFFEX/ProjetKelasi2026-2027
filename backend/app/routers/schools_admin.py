@@ -94,8 +94,8 @@ def create_school_admin(
     school = db.get(School, school_id)
     if not school:
         raise APIException(404, "École introuvable.")
-    if db.query(User).filter(User.school_id == school_id, User.email == body.email).first():
-        raise APIException(409, "Un compte avec cet email existe déjà dans cette école.")
+    if db.query(User).filter(User.email == body.email).first():
+        raise APIException(409, "Un compte utilise déjà cet email sur la plateforme. Choisissez une autre adresse.")
 
     user = User(
         school_id=school_id,

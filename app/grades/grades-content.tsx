@@ -17,6 +17,7 @@ import {
   createAssessment,
   deleteAssessment,
   upsertGrades,
+  downloadStudentBulletin,
   type AssessmentInput,
 } from '@/lib/api';
 import { ApiError } from '@/lib/api-client';
@@ -52,6 +53,7 @@ export function GradesContent() {
   const [selectedClassroom, setSelectedClassroom] = useState<string>('all');
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
   const [bulletinStudentId, setBulletinStudentId] = useState<string | null>(null);
+  const [downloadingBulletin, setDownloadingBulletin] = useState(false);
   const [gradeValues, setGradeValues] = useState<Record<string, string>>({});
   const [savingGrades, setSavingGrades] = useState(false);
   const [gradesError, setGradesError] = useState('');
@@ -224,6 +226,20 @@ export function GradesContent() {
   const handleViewBulletin = (studentId: string) => {
     setBulletinStudentId(studentId);
     setView('bulletin');
+  };
+
+  const handleExportBulletin = async () => {
+    if (!bulletinStudentId) return;
+    const student = students.find(s => s.id === bulletinStudentId);
+    if (!student) return;
+    setDownloadingBulletin(true);
+    try {
+      await downloadStudentBulletin(student.id, student.matricule);
+    } catch (e) {
+      console.error('Failed to download bulletin:', e);
+    } finally {
+      setDownloadingBulletin(false);
+    }
   };
 
   if (loading) {
@@ -554,6 +570,11 @@ export function GradesContent() {
             </div>
           )}
 
+          {classStudents.length === 0 && (
+            <p className="text-sm text-muted-foreground py-6 text-center">
+              Aucun élève inscrit dans {getClassroomName(assessment.classroom_id)} pour l'année en cours — rien à saisir ici. Vérifiez l'inscription des élèves dans cette classe.
+            </p>
+          )}
           <div className="space-y-2 max-h-[500px] overflow-y-auto scrollbar-thin">
             {classStudents.map((s, idx) => {
               const value = gradeValues[s.id] || '';
@@ -651,8 +672,8 @@ export function GradesContent() {
           <Button variant="ghost" size="sm" className="gap-1.5 rounded-xl active:scale-95 transition-all" onClick={() => setView('list')}>
             <ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">Retour</span>
           </Button>
-          <Button className="gap-1.5 rounded-xl active:scale-95 transition-all">
-            <Download className="h-4 w-4" /> <span className="hidden sm:inline">Exporter PDF</span><span className="sm:hidden">PDF</span>
+          <Button onClick={handleExportBulletin} disabled={downloadingBulletin} className="gap-1.5 rounded-xl active:scale-95 transition-all">
+            {downloadingBulletin ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} <span className="hidden sm:inline">Exporter PDF</span><span className="sm:hidden">PDF</span>
           </Button>
         </div>
 
