@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Wallet, Plus, Search, Download, FileText, ArrowLeft, Save, CreditCard, TrendingUp, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import { fetchInvoices, fetchPayments, fetchStudents, fetchClassrooms, formatMoney, createPayment, createInvoice, downloadPaymentReceipt } from '@/lib/api';
-import { ApiError } from '@/lib/api-client';
+import { ApiError, assetUrl } from '@/lib/api-client';
 import type { PaymentMethod, FeeType } from '@/lib/types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -350,9 +350,13 @@ export function PaymentsContent() {
                     <tr key={inv.id} className="hover:bg-muted/30 transition-colors">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-primary/15 to-info/10 text-primary text-xs font-semibold shrink-0">
-                            {initials}
-                          </div>
+                          {student?.photo ? (
+                            <img src={assetUrl(student.photo)} alt="" className="h-9 w-9 rounded-full object-cover shrink-0 border border-border" />
+                          ) : (
+                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-primary/15 to-info/10 text-primary text-xs font-semibold shrink-0">
+                              {initials}
+                            </div>
+                          )}
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-foreground truncate max-w-[180px]">{getStudentName(inv.student_id)}</p>
                             <p className="text-xs text-muted-foreground truncate">{getClassroomName(student?.classroom_id || '')}</p>
@@ -406,9 +410,13 @@ export function PaymentsContent() {
             return (
               <Card key={inv.id} className="p-4 rounded-2xl shadow-card hover:shadow-card-hover transition-shadow">
                 <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-primary/15 to-info/10 text-primary text-sm font-semibold shrink-0">
-                    {initials}
-                  </div>
+                  {student?.photo ? (
+                    <img src={assetUrl(student.photo)} alt="" className="h-10 w-10 rounded-full object-cover shrink-0 border border-border" />
+                  ) : (
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-primary/15 to-info/10 text-primary text-sm font-semibold shrink-0">
+                      {initials}
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
