@@ -29,6 +29,17 @@ export function Sidebar() {
   const items = navItemsByRole[role] ?? navItemsByRole.parent;
   const [schools, setSchools] = useState<SchoolOption[]>([]);
 
+  // A nav item whose href is itself a path prefix of a sibling (e.g. parent's
+  // "Accueil" at /parent, with "Mes enfants" at /parent/students) would otherwise
+  // match on every sub-page via plain startsWith — only the longest-matching href
+  // should light up, not every ancestor of the current path.
+  const currentPath = pathname ?? '/';
+  const activeHref = items.reduce<string | null>((best, item) => {
+    const matches = currentPath === item.href || currentPath.startsWith(item.href + '/');
+    if (!matches) return best;
+    return best === null || item.href.length > best.length ? item.href : best;
+  }, null);
+
   useEffect(() => {
     fetchSchools().then(s => setSchools(s.map(x => ({ id: x.id, nom: x.nom })))).catch(() => {});
   }, []);
@@ -127,8 +138,7 @@ export function Sidebar() {
         <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-1.5 custom-scrollbar">
           {items.map(item => {
             const Icon = (Icons as unknown as Record<string, Icons.LucideIcon>)[item.icon] || Icons.Circle;
-            const currentPath = pathname ?? '/';
-            const isActive = currentPath === item.href || currentPath.startsWith(item.href + '/');
+            const isActive = item.href === activeHref;
             return (
               <Link
                 key={item.href}
@@ -189,8 +199,7 @@ export function Sidebar() {
       <nav className="fixed bottom-0 left-0 right-0 z-30 flex items-center justify-around border-t border-border bg-background/95 backdrop-blur-md px-2 py-2 lg:hidden safe-area-inset-bottom shadow-lg">
         {items.slice(0, 5).map(item => {
           const Icon = (Icons as unknown as Record<string, Icons.LucideIcon>)[item.icon] || Icons.Circle;
-          const currentPath = pathname ?? '/';
-          const isActive = currentPath === item.href || currentPath.startsWith(item.href + '/');
+          const isActive = item.href === activeHref;
           return (
             <Link
               key={item.href}

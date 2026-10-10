@@ -27,6 +27,11 @@ yarn-error.log*
 # local env files
 .env
 .env*.local
+.env.production
+
+# user-uploaded files (school logos, student photos)
+backend/uploads/
+!.env.production.example
 
 # vercel
 .vercel
@@ -40,5 +45,17 @@ next-env.d.ts
 
 # my local doc
 projetkelassilocalsave/
-kelasimaindoc/
-Kelasidocsup/
+Kelasimaindoc/
+kelasidocsup/
+bolt conversation.txt
+ProjetKelasi2026.txt
+bun.lock
+
+# backend (Python/FastAPI)
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/.env
+backend/.env.production
+!backend/.env.production.example
+backend/*.egg-info/

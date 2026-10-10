@@ -1,0 +1,24 @@
+[Unit]
+Description=Kelasi Next.js frontend
+After=network.target kelasi-backend.service
+Wants=kelasi-backend.service
+
+[Service]
+Type=simple
+User=kelasi
+Group=kelasi
+WorkingDirectory=/opt/kelasi
+EnvironmentFile=/opt/kelasi/.env.production
+Environment=PORT=3000
+ExecStart=/usr/bin/npm run start
+Restart=on-failure
+RestartSec=5
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

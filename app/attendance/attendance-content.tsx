@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { CheckSquare, Check, X, Clock, FileText, Save, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
-import { fetchStudents, fetchClassrooms, fetchAttendance, fetchParents, fetchAllStudentParents } from '@/lib/api';
+import { fetchStudents, fetchClassrooms, fetchAttendance, fetchParents, fetchAllStudentParents, upsertAttendance } from '@/lib/api';
+import { ApiError } from '@/lib/api-client';
 import type { AttendanceStatus } from '@/lib/types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,37 +24,30 @@ export function AttendanceContent() {
   const [classrooms, setClassrooms] = useState<Awaited<ReturnType<typeof fetchClassrooms>>>([]);
   const [parents, setParents] = useState<Awaited<ReturnType<typeof fetchParents>>>([]);
   const [studentParents, setStudentParents] = useState<{ id: string; school_id: string; student_id: string; parent_id: string }[]>([]);
-  const [existingAttendance, setExistingAttendance] = useState<Awaited<ReturnType<typeof fetchAttendance>>>([]);
 
   const [selectedClass, setSelectedClass] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [attendanceState, setAttendanceState] = useState<Record<string, AttendanceStatus>>({});
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [s, c, p, sp, att] = await Promise.all([
+        const [s, c, p, sp] = await Promise.all([
           fetchStudents(),
           fetchClassrooms(),
           fetchParents(),
           fetchAllStudentParents(),
-          fetchAttendance(),
         ]);
         if (cancelled) return;
         setStudents(s);
         setClassrooms(c);
         setParents(p);
         setStudentParents(sp);
-        setExistingAttendance(att);
         if (c.length > 0) setSelectedClass(c[0].id);
-        // Initialize attendance state from fetched data
-        const state: Record<string, AttendanceStatus> = {};
-        att.forEach(a => {
-          state[a.student_id] = a.statut as AttendanceStatus;
-        });
-        setAttendanceState(state);
       } catch (e) {
         console.error('Failed to load attendance data:', e);
       } finally {
@@ -62,6 +56,28 @@ export function AttendanceContent() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // Re-fetch attendance for the selected class + date whenever either changes,
+  // instead of seeding state once from an unfiltered fetch.
+  useEffect(() => {
+    if (!selectedClass || !date) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const att = await fetchAttendance({ classroom_id: selectedClass, date });
+        if (cancelled) return;
+        const state: Record<string, AttendanceStatus> = {};
+        att.forEach(a => {
+          state[a.student_id] = a.statut as AttendanceStatus;
+        });
+        setAttendanceState(state);
+        setSaved(false);
+      } catch (e) {
+        console.error('Failed to load attendance for class/date:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedClass, date]);
 
   const classStudents = useMemo(() => {
     return students.filter(s => s.classroom_id === selectedClass);
@@ -88,9 +104,25 @@ export function AttendanceContent() {
     setSaved(false);
   };
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveError('');
+    try {
+      await upsertAttendance(
+        classStudents.map(s => ({
+          student_id: s.id,
+          classroom_id: selectedClass,
+          date,
+          statut: attendanceState[s.id] || 'present',
+        }))
+      );
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (e) {
+      setSaveError(e instanceof ApiError ? e.message : 'Échec de l\'enregistrement des présences.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const summary = useMemo(() => {
@@ -110,6 +142,18 @@ export function AttendanceContent() {
     );
   }
 
+  if (classrooms.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center gap-2">
+        <CheckSquare className="h-10 w-10 text-muted-foreground/40" />
+        <p className="text-foreground font-medium">Aucune classe configurée</p>
+        <p className="text-sm text-muted-foreground max-w-sm">
+          Il faut d'abord créer au moins une classe (menu Classes) avant de pouvoir faire l'appel.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
@@ -117,10 +161,17 @@ export function AttendanceContent() {
           <h1 className="text-xl sm:text-2xl font-bold text-foreground">Appel quotidien</h1>
           <p className="text-sm text-muted-foreground mt-1">Marquez la présence de chaque élève</p>
         </div>
-        <Button onClick={handleSave} className="gap-1.5 self-start active:scale-95 transition-transform">
-          <Save className="h-4 w-4" /> {saved ? 'Enregistré!' : 'Enregistrer l\'appel'}
+        <Button onClick={handleSave} disabled={saving} className="gap-1.5 self-start active:scale-95 transition-transform">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          {saved ? 'Enregistré!' : 'Enregistrer l\'appel'}
         </Button>
       </div>
+
+      {saveError && (
+        <div className="rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive animate-fade-in">
+          {saveError}
+        </div>
+      )}
 
       {/* Class selector + date */}
       <Card className="p-4 sm:p-5 rounded-2xl shadow-card hover:shadow-card-hover transition-shadow">
@@ -131,7 +182,7 @@ export function AttendanceContent() {
             className="rounded-xl border border-input bg-background px-3 py-2.5 text-sm focus:border-primary focus:outline-none transition-colors w-full sm:w-auto"
           >
             {classrooms.map(c => (
-              <option key={c.id} value={c.id}>{c.nom} ({c.niveau})</option>
+              <option key={c.id} value={c.id}>{c.nom}</option>
             ))}
           </select>
           <div className="flex items-center gap-2">

@@ -3,41 +3,49 @@
 import { ReactNode, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { getDefaultRouteForRole } from '@/lib/navigation';
 import { Loader2 } from 'lucide-react';
 import type { Role } from '@/lib/types';
 
 const roleAccess: Record<Role, string[]> = {
-  super_admin: ['/dashboard', '/schools', '/subscriptions', '/settings'],
-  school_admin: ['/dashboard', '/students', '/parents', '/teachers', '/classes', '/attendance', '/grades', '/payments', '/communication', '/reports', '/settings'],
-  secretary: ['/dashboard', '/students', '/parents', '/classes', '/communication'],
-  accountant: ['/dashboard', '/payments', '/students', '/reports'],
-  teacher: ['/dashboard', '/classes', '/attendance', '/grades', '/communication'],
-  parent: ['/dashboard', '/parent', '/communication'],
+  super_admin: ['/schools', '/subscriptions', '/super-admins'],
+  school_admin: ['/dashboard', '/students', '/parents', '/teachers', '/classes', '/timetable', '/attendance', '/grades', '/payments', '/hours', '/communication', '/reports', '/settings'],
+  secretary: ['/dashboard', '/students', '/parents', '/teachers', '/classes', '/timetable', '/attendance', '/grades', '/hours', '/reports', '/communication', '/settings'],
+  accountant: ['/dashboard', '/payments', '/students', '/hours', '/reports'],
+  teacher: ['/dashboard', '/classes', '/students', '/timetable', '/attendance', '/grades', '/communication'],
+  parent: ['/parent', '/communication'],
 };
 
+function isAllowedPath(role: Role, currentPath: string): boolean {
+  const allowed = roleAccess[role] ?? [];
+  return allowed.some(p => currentPath === p || currentPath.startsWith(p + '/') || currentPath.startsWith(p));
+}
+
 export function RouteGuard({ children }: { children: ReactNode }) {
-  const { session, profile, loading } = useAuth();
+  const { profile, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const currentPath = pathname ?? '/';
 
   useEffect(() => {
-    const currentPath = pathname ?? '/';
-
     if (loading) return;
-    if (!session) {
+    if (!profile) {
       router.replace('/');
       return;
     }
-    if (profile) {
-      const allowed = roleAccess[profile.role] ?? [];
-      const isAllowed = allowed.some(p => currentPath === p || currentPath.startsWith(p + '/') || currentPath.startsWith(p));
-      if (!isAllowed && currentPath !== '/dashboard') {
-        router.replace('/dashboard');
-      }
+    const home = getDefaultRouteForRole(profile.role);
+    if (!isAllowedPath(profile.role, currentPath) && currentPath !== home) {
+      router.replace(home);
     }
-  }, [session, profile, loading, pathname, router]);
+  }, [profile, loading, currentPath, router]);
 
-  if (loading || !session) {
+  // A role landing on a route it isn't allowed to see (stale bookmark, typed URL,
+  // browser back button) must never get a render frame of that page's data before
+  // the effect above redirects it away — so the guard withholds children here too,
+  // not just in the effect.
+  const blocked = !loading && profile && !isAllowedPath(profile.role, currentPath) && currentPath !== getDefaultRouteForRole(profile.role);
+
+  if (loading || !profile || blocked) {
     return (
       <div className="flex items-center justify-center h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

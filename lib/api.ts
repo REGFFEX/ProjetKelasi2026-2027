@@ -1,6 +1,6 @@
-import { supabase } from './supabase';
+import { apiGet, apiPost, apiPatch, apiPut, apiDelete, apiUpload, downloadFile } from './api-client';
 
-// Database row types (snake_case from Postgres)
+// Database row types (snake_case, matching the FastAPI response shapes)
 export interface DbSchool {
   id: string;
   nom: string;
@@ -21,11 +21,13 @@ export interface DbStudent {
   photo: string | null;
   classroom_id: string | null;
   statut: string;
+  created_at: string;
 }
 
 export interface DbParent {
   id: string;
   school_id: string;
+  user_id: string | null;
   nom: string;
   telephone: string;
   email: string | null;
@@ -46,12 +48,31 @@ export interface DbTeacher {
   statut: string;
 }
 
+export interface DbCycle {
+  id: string;
+  school_id: string;
+  nom: string;
+  ordre: number;
+  evaluation_mode: 'notes' | 'qualitatif';
+  paiement_horaire: boolean;
+  moyenne_ponderee: boolean;
+}
+
+export interface DbLevel {
+  id: string;
+  school_id: string;
+  cycle_id: string;
+  nom: string;
+  ordre: number;
+}
+
 export interface DbClassroom {
   id: string;
   school_id: string;
-  niveau: string;
+  level_id: string;
   nom: string;
   salle: string;
+  filiere: string | null;
   enseignant_principal_id: string | null;
 }
 
@@ -60,6 +81,21 @@ export interface DbSubject {
   school_id: string;
   nom: string;
   coefficient: number;
+}
+
+export interface DbEvaluationType {
+  id: string;
+  school_id: string;
+  nom: string;
+}
+
+export interface DbTeacherAssignment {
+  id: string;
+  school_id: string;
+  teacher_id: string;
+  subject_id: string;
+  classroom_id: string;
+  academic_year_id: string;
 }
 
 export interface DbAttendance {
@@ -77,6 +113,7 @@ export interface DbAssessment {
   subject_id: string;
   classroom_id: string;
   term_id: string;
+  evaluation_type_id: string | null;
   libelle: string;
   date: string;
   coefficient: number;
@@ -87,7 +124,8 @@ export interface DbGrade {
   school_id: string;
   assessment_id: string;
   student_id: string;
-  note: number;
+  note: number | null;
+  appreciation: string | null;
   statut_validation: string;
 }
 
@@ -113,35 +151,22 @@ export interface DbPayment {
   partiel: boolean;
 }
 
-export interface DbNotification {
-  id: string;
-  school_id: string;
-  type: string;
-  destinataire_id: string;
-  canal: string;
-  message: string;
-  statut: string;
-  date: string;
-}
-
-export interface DbAnnouncement {
-  id: string;
-  school_id: string;
-  auteur_id: string | null;
-  auteur_nom: string;
-  cible: string;
-  titre: string;
-  contenu: string;
-  date_publication: string;
-}
-
 export interface DbAcademicYear {
   id: string;
   school_id: string;
   libelle: string;
   date_debut: string;
   date_fin: string;
-  statut: string;
+  statut: 'active' | 'archivee';
+}
+
+export interface DbTerm {
+  id: string;
+  school_id: string;
+  academic_year_id: string;
+  libelle: string;
+  date_debut: string;
+  date_fin: string;
 }
 
 export interface DbStudentParent {
@@ -151,518 +176,605 @@ export interface DbStudentParent {
   parent_id: string;
 }
 
-// ── Mock & Fallback Datasets ─────────────────────────────────
-
-const SCHOOL_ID = '00000000-0000-0000-0000-000000000001';
-
-export const MOCK_SCHOOLS: DbSchool[] = [
-  {
-    id: SCHOOL_ID,
-    nom: 'École Mixte Lumumba',
-    logo: '',
-    adresse: 'Av. de la Victoire, Kinshasa',
-    telephone: '+243 81 234 5678',
-    statut_abonnement: 'actif',
-    date_creation: '2021-09-01',
-  },
-];
-
-export const MOCK_CLASSROOMS: DbClassroom[] = [
-  { id: 'c1', school_id: SCHOOL_ID, niveau: 'Maternelle', nom: '1ère Maternelle', salle: 'Salle M1', enseignant_principal_id: 't1' },
-  { id: 'c2', school_id: SCHOOL_ID, niveau: 'Primaire', nom: '6ème Primaire A', salle: 'Salle P6A', enseignant_principal_id: 't2' },
-  { id: 'c3', school_id: SCHOOL_ID, niveau: 'Primaire', nom: '6ème Primaire B', salle: 'Salle P6B', enseignant_principal_id: 't3' },
-  { id: 'c4', school_id: SCHOOL_ID, niveau: 'Secondaire', nom: '1ère Humanités Math-Physique', salle: 'Salle H1MP', enseignant_principal_id: 't1' },
-  { id: 'c5', school_id: SCHOOL_ID, niveau: 'Secondaire', nom: '2ème Humanités Littéraire', salle: 'Salle H2L', enseignant_principal_id: 't4' },
-  { id: 'c6', school_id: SCHOOL_ID, niveau: 'Secondaire', nom: '4ème Humanités Chim-Bio', salle: 'Salle H4CB', enseignant_principal_id: 't5' },
-];
-
-export const MOCK_SUBJECTS: DbSubject[] = [
-  { id: 'sub1', school_id: SCHOOL_ID, nom: 'Mathématiques', coefficient: 4 },
-  { id: 'sub2', school_id: SCHOOL_ID, nom: 'Français', coefficient: 4 },
-  { id: 'sub3', school_id: SCHOOL_ID, nom: 'Histoire-Géographie', coefficient: 2 },
-  { id: 'sub4', school_id: SCHOOL_ID, nom: 'Sciences', coefficient: 3 },
-  { id: 'sub5', school_id: SCHOOL_ID, nom: 'Anglais', coefficient: 2 },
-  { id: 'sub6', school_id: SCHOOL_ID, nom: 'EPS', coefficient: 1 },
-  { id: 'sub7', school_id: SCHOOL_ID, nom: 'Informatique', coefficient: 2 },
-  { id: 'sub8', school_id: SCHOOL_ID, nom: 'Religion', coefficient: 1 },
-  { id: 'sub9', school_id: SCHOOL_ID, nom: 'Éducation artistique', coefficient: 1 },
-];
-
-export const MOCK_TEACHERS: DbTeacher[] = [
-  { id: 't1', school_id: SCHOOL_ID, user_id: null, nom: 'Tshala', prenom: 'Esther', email: 'esther.tshala@kelasi.cd', telephone: '+243 81 555 6666', matiere_ids: ['sub1', 'sub7'], classroom_ids: ['c1', 'c4'], statut: 'actif' },
-  { id: 't2', school_id: SCHOOL_ID, user_id: null, nom: 'Mpeza', prenom: 'David', email: 'david.mpeza@kelasi.cd', telephone: '+243 81 999 1010', matiere_ids: ['sub2', 'sub5'], classroom_ids: ['c2'], statut: 'actif' },
-  { id: 't3', school_id: SCHOOL_ID, user_id: null, nom: 'Nkulu', prenom: 'Sarah', email: 'sarah.nkulu@kelasi.cd', telephone: '+243 82 121 3141', matiere_ids: ['sub4'], classroom_ids: ['c3'], statut: 'actif' },
-  { id: 't4', school_id: SCHOOL_ID, user_id: null, nom: 'Bakwa', prenom: 'Michel', email: 'michel.bakwa@kelasi.cd', telephone: '+243 82 343 5454', matiere_ids: ['sub3'], classroom_ids: ['c5'], statut: 'actif' },
-  { id: 't5', school_id: SCHOOL_ID, user_id: null, nom: 'Mbuyi', prenom: 'Jeanne', email: 'jeanne.mbuyi@kelasi.cd', telephone: '+243 81 565 6767', matiere_ids: ['sub6', 'sub9'], classroom_ids: ['c6'], statut: 'actif' },
-];
-
-export const MOCK_PARENTS: DbParent[] = [
-  { id: 'p1', school_id: SCHOOL_ID, nom: 'Jean Mukendi', telephone: '+243 81 234 5678', email: 'jean.m@gmail.com', adresse: 'Matonge, Kinshasa', profession: 'Commerçant' },
-  { id: 'p2', school_id: SCHOOL_ID, nom: 'Adèle Kabongo', telephone: '+243 82 345 6789', email: 'adele.k@gmail.com', adresse: 'Lemba, Kinshasa', profession: 'Infirmière' },
-  { id: 'p3', school_id: SCHOOL_ID, nom: 'Félix Mwamba', telephone: '+243 85 456 7890', email: 'felix.m@gmail.com', adresse: 'Bandalungwa, Kinshasa', profession: 'Chauffeur' },
-  { id: 'p4', school_id: SCHOOL_ID, nom: 'Claire Ntumba', telephone: '+243 89 567 8901', email: 'claire.n@gmail.com', adresse: 'Ngaliema, Kinshasa', profession: 'Enseignante' },
-  { id: 'p5', school_id: SCHOOL_ID, nom: 'Patrick Ilunga', telephone: '+243 81 678 9012', email: 'patrick.i@gmail.com', adresse: 'Kintambo, Kinshasa', profession: 'Mécanicien' },
-  { id: 'p6', school_id: SCHOOL_ID, nom: 'Brigitte Kasongo', telephone: '+243 82 789 0123', email: 'brigitte.k@gmail.com', adresse: 'Gombe, Kinshasa', profession: 'Secrétaire' },
-  { id: 'p7', school_id: SCHOOL_ID, nom: 'Augustin Mwenze', telephone: '+243 85 890 1234', email: 'augustin.m@gmail.com', adresse: 'Ngaba, Kinshasa', profession: 'Avocat' },
-  { id: 'p8', school_id: SCHOOL_ID, nom: 'Solange Tshibangu', telephone: '+243 89 901 2345', email: 'solange.t@gmail.com', adresse: 'Selembao, Kinshasa', profession: 'Coiffeuse' },
-  { id: 'p9', school_id: SCHOOL_ID, nom: 'Robert Lukusa', telephone: '+243 81 012 3456', email: 'robert.l@gmail.com', adresse: 'Matonge, Kinshasa', profession: 'Comptable' },
-  { id: 'p10', school_id: SCHOOL_ID, nom: 'Nadine Mbiya', telephone: '+243 82 123 4567', email: 'nadine.m@gmail.com', adresse: 'Lemba, Kinshasa', profession: 'Vendeuse' },
-];
-
-export const MOCK_STUDENTS: DbStudent[] = [
-  { id: 's1', school_id: SCHOOL_ID, matricule: 'MAT-2026-001', nom: 'Mukendi', prenom: 'Aimé', date_naissance: '2015-03-12', photo: null, classroom_id: 'c2', statut: 'actif' },
-  { id: 's2', school_id: SCHOOL_ID, matricule: 'MAT-2026-002', nom: 'Kabongo', prenom: 'Béatrice', date_naissance: '2015-07-22', photo: null, classroom_id: 'c2', statut: 'actif' },
-  { id: 's3', school_id: SCHOOL_ID, matricule: 'MAT-2026-003', nom: 'Mwamba', prenom: 'Christian', date_naissance: '2014-11-05', photo: null, classroom_id: 'c3', statut: 'actif' },
-  { id: 's4', school_id: SCHOOL_ID, matricule: 'MAT-2026-004', nom: 'Ntumba', prenom: 'Divine', date_naissance: '2015-01-18', photo: null, classroom_id: 'c2', statut: 'actif' },
-  { id: 's5', school_id: SCHOOL_ID, matricule: 'MAT-2026-005', nom: 'Ilunga', prenom: 'Emmanuel', date_naissance: '2012-09-30', photo: null, classroom_id: 'c4', statut: 'actif' },
-  { id: 's6', school_id: SCHOOL_ID, matricule: 'MAT-2026-006', nom: 'Kasongo', prenom: 'Fanny', date_naissance: '2011-04-14', photo: null, classroom_id: 'c5', statut: 'actif' },
-  { id: 's7', school_id: SCHOOL_ID, matricule: 'MAT-2026-007', nom: 'Mwenze', prenom: 'Gloire', date_naissance: '2009-08-25', photo: null, classroom_id: 'c6', statut: 'actif' },
-  { id: 's8', school_id: SCHOOL_ID, matricule: 'MAT-2026-008', nom: 'Tshibangu', prenom: 'Hélène', date_naissance: '2020-02-10', photo: null, classroom_id: 'c1', statut: 'actif' },
-  { id: 's9', school_id: SCHOOL_ID, matricule: 'MAT-2026-009', nom: 'Lukusa', prenom: 'Iris', date_naissance: '2015-06-19', photo: null, classroom_id: 'c2', statut: 'actif' },
-  { id: 's10', school_id: SCHOOL_ID, matricule: 'MAT-2026-010', nom: 'Mbiya', prenom: 'Joël', date_naissance: '2012-12-01', photo: null, classroom_id: 'c4', statut: 'actif' },
-  { id: 's11', school_id: SCHOOL_ID, matricule: 'MAT-2026-011', nom: 'Bofando', prenom: 'Kévin', date_naissance: '2015-05-08', photo: null, classroom_id: 'c3', statut: 'actif' },
-  { id: 's12', school_id: SCHOOL_ID, matricule: 'MAT-2026-012', nom: 'Mukeba', prenom: 'Larissa', date_naissance: '2011-10-17', photo: null, classroom_id: 'c5', statut: 'actif' },
-  { id: 's13', school_id: SCHOOL_ID, matricule: 'MAT-2026-013', nom: 'Kasawu', prenom: 'Marc', date_naissance: '2009-03-29', photo: null, classroom_id: 'c6', statut: 'actif' },
-  { id: 's14', school_id: SCHOOL_ID, matricule: 'MAT-2026-014', nom: 'Bakwa', prenom: 'Nadège', date_naissance: '2020-09-11', photo: null, classroom_id: 'c1', statut: 'actif' },
-  { id: 's15', school_id: SCHOOL_ID, matricule: 'MAT-2026-015', nom: 'Nkulu', prenom: 'Olivier', date_naissance: '2014-04-03', photo: null, classroom_id: 'c3', statut: 'actif' },
-];
-
-export const MOCK_STUDENT_PARENTS: DbStudentParent[] = [
-  { id: 'sp1', school_id: SCHOOL_ID, student_id: 's1', parent_id: 'p1' },
-  { id: 'sp2', school_id: SCHOOL_ID, student_id: 's2', parent_id: 'p2' },
-  { id: 'sp3', school_id: SCHOOL_ID, student_id: 's3', parent_id: 'p3' },
-  { id: 'sp4', school_id: SCHOOL_ID, student_id: 's4', parent_id: 'p4' },
-  { id: 'sp5', school_id: SCHOOL_ID, student_id: 's5', parent_id: 'p5' },
-  { id: 'sp6', school_id: SCHOOL_ID, student_id: 's6', parent_id: 'p6' },
-  { id: 'sp7', school_id: SCHOOL_ID, student_id: 's7', parent_id: 'p7' },
-  { id: 'sp8', school_id: SCHOOL_ID, student_id: 's8', parent_id: 'p8' },
-  { id: 'sp9', school_id: SCHOOL_ID, student_id: 's9', parent_id: 'p9' },
-  { id: 'sp10', school_id: SCHOOL_ID, student_id: 's10', parent_id: 'p10' },
-];
-
-const today = new Date().toISOString().split('T')[0];
-
-export const MOCK_ATTENDANCE: DbAttendance[] = MOCK_STUDENTS.map((s, idx) => ({
-  id: `att-${s.id}`,
-  school_id: SCHOOL_ID,
-  student_id: s.id,
-  classroom_id: s.classroom_id,
-  date: today,
-  statut: idx % 7 === 0 ? 'absent' : idx % 5 === 0 ? 'retard' : idx % 9 === 0 ? 'justifie' : 'present',
-}));
-
-export const MOCK_ACADEMIC_YEARS: DbAcademicYear[] = [
-  { id: 'ay1', school_id: SCHOOL_ID, libelle: '2026-2027', date_debut: '2026-09-01', date_fin: '2027-07-15', statut: 'active' },
-  { id: 'ay2', school_id: SCHOOL_ID, libelle: '2025-2026', date_debut: '2025-09-01', date_fin: '2026-07-15', statut: 'archivee' },
-];
-
-export const MOCK_ASSESSMENTS: DbAssessment[] = [
-  { id: 'ass1', school_id: SCHOOL_ID, subject_id: 'sub1', classroom_id: 'c2', term_id: 'term1', libelle: 'Interrogation Math 1', date: today, coefficient: 1 },
-  { id: 'ass2', school_id: SCHOOL_ID, subject_id: 'sub2', classroom_id: 'c2', term_id: 'term1', libelle: 'Examen Français T1', date: today, coefficient: 2 },
-  { id: 'ass3', school_id: SCHOOL_ID, subject_id: 'sub4', classroom_id: 'c4', term_id: 'term1', libelle: 'TP Physique-Chimie', date: today, coefficient: 1 },
-];
-
-export const MOCK_GRADES: DbGrade[] = [
-  { id: 'g1', school_id: SCHOOL_ID, assessment_id: 'ass1', student_id: 's1', note: 16.5, statut_validation: 'valide' },
-  { id: 'g2', school_id: SCHOOL_ID, assessment_id: 'ass1', student_id: 's2', note: 14.0, statut_validation: 'valide' },
-  { id: 'g3', school_id: SCHOOL_ID, assessment_id: 'ass1', student_id: 's4', note: 18.0, statut_validation: 'valide' },
-  { id: 'g4', school_id: SCHOOL_ID, assessment_id: 'ass2', student_id: 's1', note: 15.0, statut_validation: 'valide' },
-  { id: 'g5', school_id: SCHOOL_ID, assessment_id: 'ass2', student_id: 's2', note: 13.5, statut_validation: 'valide' },
-  { id: 'g6', school_id: SCHOOL_ID, assessment_id: 'ass3', student_id: 's5', note: 17.5, statut_validation: 'valide' },
-];
-
-export const MOCK_INVOICES: DbInvoice[] = [
-  { id: 'inv1', school_id: SCHOOL_ID, student_id: 's1', type_frais: 'scolarite', montant_total: 150000, montant_paye: 150000, reste_a_payer: 0, date_emission: '2026-09-01', statut: 'paye' },
-  { id: 'inv2', school_id: SCHOOL_ID, student_id: 's2', type_frais: 'scolarite', montant_total: 150000, montant_paye: 100000, reste_a_payer: 50000, date_emission: '2026-09-01', statut: 'partiel' },
-  { id: 'inv3', school_id: SCHOOL_ID, student_id: 's3', type_frais: 'scolarite', montant_total: 150000, montant_paye: 0, reste_a_payer: 150000, date_emission: '2026-09-01', statut: 'en_attente' },
-  { id: 'inv4', school_id: SCHOOL_ID, student_id: 's4', type_frais: 'cantine', montant_total: 45000, montant_paye: 45000, reste_a_payer: 0, date_emission: '2026-09-05', statut: 'paye' },
-  { id: 'inv5', school_id: SCHOOL_ID, student_id: 's5', type_frais: 'transport', montant_total: 60000, montant_paye: 30000, reste_a_payer: 30000, date_emission: '2026-09-05', statut: 'partiel' },
-];
-
-export const MOCK_PAYMENTS: DbPayment[] = [
-  { id: 'pay1', school_id: SCHOOL_ID, invoice_id: 'inv1', montant: 150000, date_paiement: today, mode_paiement: 'mobile_money', partiel: false },
-  { id: 'pay2', school_id: SCHOOL_ID, invoice_id: 'inv2', montant: 100000, date_paiement: today, mode_paiement: 'especes', partiel: true },
-  { id: 'pay3', school_id: SCHOOL_ID, invoice_id: 'inv4', montant: 45000, date_paiement: today, mode_paiement: 'carte_bancaire', partiel: false },
-  { id: 'pay4', school_id: SCHOOL_ID, invoice_id: 'inv5', montant: 30000, date_paiement: today, mode_paiement: 'mobile_money', partiel: true },
-];
-
-export const MOCK_NOTIFICATIONS: DbNotification[] = [
-  { id: 'n1', school_id: SCHOOL_ID, type: 'absence', destinataire_id: 'p3', canal: 'sms', message: 'Votre enfant Christian Mwamba a été signalé absent aujourd\'hui.', statut: 'envoye', date: today },
-  { id: 'n2', school_id: SCHOOL_ID, type: 'facture', destinataire_id: 'p2', canal: 'whatsapp', message: 'Rappel: Solde restant de 50.000 FC pour les frais de scolarité de Béatrice.', statut: 'envoye', date: today },
-  { id: 'n3', school_id: SCHOOL_ID, type: 'bulletin', destinataire_id: 'p1', canal: 'app', message: 'Le bulletin du 1er Trimestre de Aimé Mukendi est disponible.', statut: 'envoye', date: today },
-];
-
-export const MOCK_ANNOUNCEMENTS: DbAnnouncement[] = [
-  { id: 'ann1', school_id: SCHOOL_ID, auteur_id: 'u1', auteur_nom: 'Direction Lumumba', cible: 'tous', titre: 'Réunion des parents d\'élèves', contenu: 'Chers parents, la grande réunion trimestrielle aura lieu ce samedi à 10h au grand hall de l\'établissement.', date_publication: today },
-  { id: 'ann2', school_id: SCHOOL_ID, auteur_id: 'u1', auteur_nom: 'Secrétariat Général', cible: 'parents', titre: 'Paiement de la 2ème tranche des frais', contenu: 'Veuillez régulariser la 2ème tranche des frais de scolarité avant le 15 du mois.', date_publication: today },
-  { id: 'ann3', school_id: SCHOOL_ID, auteur_id: 'u2', auteur_nom: 'Tshala Esther (Prof. Math)', cible: 'enseignants', titre: 'remise des cahiers de cotes', contenu: 'Merci de transmettre les fiches de cotation trimestrielles avant le vendredi 17h.', date_publication: today },
-];
-
-export const MOCK_USERS = [
-  { id: 'u1', school_id: SCHOOL_ID, nom: 'Joseph Kabasele', email: 'directeur@kelasi.cd', telephone: '+243 81 000 0001', role: 'school_admin', statut: 'actif' },
-  { id: 'u2', school_id: SCHOOL_ID, nom: 'Marie Kalala', email: 'secretaire@kelasi.cd', telephone: '+243 81 000 0002', role: 'secretary', statut: 'actif' },
-  { id: 'u3', school_id: SCHOOL_ID, nom: 'Paul Mukendi', email: 'comptable@kelasi.cd', telephone: '+243 81 000 0003', role: 'accountant', statut: 'actif' },
-  { id: 'u4', school_id: SCHOOL_ID, nom: 'Esther Tshala', email: 'prof.esther@kelasi.cd', telephone: '+243 81 555 6666', role: 'teacher', statut: 'actif' },
-  { id: 'u5', school_id: SCHOOL_ID, nom: 'Jean Mukendi', email: 'parent.jean@kelasi.cd', telephone: '+243 81 234 5678', role: 'parent', statut: 'actif' },
-];
-
-// ── Fetch functions ──────────────────────────────────────────
-
-export async function fetchSchools() {
-  try {
-    const { data, error } = await supabase.from('schools').select('*');
-    if (!error && data && data.length > 0) return data as DbSchool[];
-  } catch (e) {
-    console.warn('Fetch fallback schools:', e);
-  }
-  return MOCK_SCHOOLS;
+export interface DbUser {
+  id: string;
+  school_id: string | null;
+  nom: string;
+  email: string;
+  telephone: string;
+  role: string;
+  statut: string;
+  avatar_url?: string | null;
 }
 
-export async function fetchStudents() {
-  try {
-    const { data, error } = await supabase.from('students').select('*').order('nom');
-    if (!error && data && data.length > 0) return data as DbStudent[];
-  } catch (e) {
-    console.warn('Fetch fallback students:', e);
-  }
-  return MOCK_STUDENTS;
-}
+// ── Students ──────────────────────────────────────────────────
 
-export async function fetchStudentById(id: string) {
-  try {
-    const { data, error } = await supabase.from('students').select('*').eq('id', id).maybeSingle();
-    if (!error && data) return data as DbStudent;
-  } catch (e) {
-    console.warn('Fetch fallback student by id:', e);
-  }
-  return MOCK_STUDENTS.find(s => s.id === id) || MOCK_STUDENTS[0];
-}
-
-export async function fetchStudentParents(studentId: string) {
-  try {
-    const { data, error } = await supabase
-      .from('student_parents')
-      .select('parent_id')
-      .eq('student_id', studentId);
-    if (!error && data && data.length > 0) {
-      const parentIds = (data as DbStudentParent[]).map(sp => sp.parent_id);
-      const { data: parents, error: pErr } = await supabase.from('parents').select('*').in('id', parentIds);
-      if (!pErr && parents && parents.length > 0) return parents as DbParent[];
-    }
-  } catch (e) {
-    console.warn('Fetch fallback student parents:', e);
-  }
-  const linkedParentIds = MOCK_STUDENT_PARENTS.filter(sp => sp.student_id === studentId).map(sp => sp.parent_id);
-  return MOCK_PARENTS.filter(p => linkedParentIds.includes(p.id));
-}
-
-export async function fetchStudentDocuments(studentId: string) {
-  try {
-    const { data, error } = await supabase
-      .from('student_documents')
-      .select('*')
-      .eq('student_id', studentId);
-    if (!error && data) return data;
-  } catch (e) {
-    console.warn('Fetch fallback student docs:', e);
-  }
-  return [];
-}
-
-export async function fetchParents() {
-  try {
-    const { data, error } = await supabase.from('parents').select('*').order('nom');
-    if (!error && data && data.length > 0) return data as DbParent[];
-  } catch (e) {
-    console.warn('Fetch fallback parents:', e);
-  }
-  return MOCK_PARENTS;
-}
-
-export async function fetchTeachers() {
-  try {
-    const { data, error } = await supabase.from('teachers').select('*').order('nom');
-    if (!error && data && data.length > 0) return data as DbTeacher[];
-  } catch (e) {
-    console.warn('Fetch fallback teachers:', e);
-  }
-  return MOCK_TEACHERS;
-}
-
-export async function fetchClassrooms() {
-  try {
-    const { data, error } = await supabase.from('classrooms').select('*').order('nom');
-    if (!error && data && data.length > 0) return data as DbClassroom[];
-  } catch (e) {
-    console.warn('Fetch fallback classrooms:', e);
-  }
-  return MOCK_CLASSROOMS;
-}
-
-export async function fetchSubjects() {
-  try {
-    const { data, error } = await supabase.from('subjects').select('*').order('nom');
-    if (!error && data && data.length > 0) return data as DbSubject[];
-  } catch (e) {
-    console.warn('Fetch fallback subjects:', e);
-  }
-  return MOCK_SUBJECTS;
-}
-
-export async function fetchAttendance() {
-  try {
-    const { data, error } = await supabase.from('attendance').select('*').order('date', { ascending: false });
-    if (!error && data && data.length > 0) return data as DbAttendance[];
-  } catch (e) {
-    console.warn('Fetch fallback attendance:', e);
-  }
-  return MOCK_ATTENDANCE;
-}
-
-export async function fetchAssessments() {
-  try {
-    const { data, error } = await supabase.from('assessments').select('*').order('date', { ascending: false });
-    if (!error && data && data.length > 0) return data as DbAssessment[];
-  } catch (e) {
-    console.warn('Fetch fallback assessments:', e);
-  }
-  return MOCK_ASSESSMENTS;
-}
-
-export async function fetchGrades() {
-  try {
-    const { data, error } = await supabase.from('grades').select('*');
-    if (!error && data && data.length > 0) return data as DbGrade[];
-  } catch (e) {
-    console.warn('Fetch fallback grades:', e);
-  }
-  return MOCK_GRADES;
-}
-
-export async function fetchInvoices() {
-  try {
-    const { data, error } = await supabase.from('invoices').select('*').order('date_emission', { ascending: false });
-    if (!error && data && data.length > 0) return data as DbInvoice[];
-  } catch (e) {
-    console.warn('Fetch fallback invoices:', e);
-  }
-  return MOCK_INVOICES;
-}
-
-export async function fetchPayments() {
-  try {
-    const { data, error } = await supabase.from('payments').select('*').order('date_paiement', { ascending: false });
-    if (!error && data && data.length > 0) return data as DbPayment[];
-  } catch (e) {
-    console.warn('Fetch fallback payments:', e);
-  }
-  return MOCK_PAYMENTS;
-}
-
-export async function fetchNotifications() {
-  try {
-    const { data, error } = await supabase.from('notifications').select('*').order('date', { ascending: false });
-    if (!error && data && data.length > 0) return data as DbNotification[];
-  } catch (e) {
-    console.warn('Fetch fallback notifications:', e);
-  }
-  return MOCK_NOTIFICATIONS;
-}
-
-export async function fetchAnnouncements() {
-  try {
-    const { data, error } = await supabase.from('announcements').select('*').order('date_publication', { ascending: false });
-    if (!error && data && data.length > 0) return data as DbAnnouncement[];
-  } catch (e) {
-    console.warn('Fetch fallback announcements:', e);
-  }
-  return MOCK_ANNOUNCEMENTS;
-}
-
-export async function fetchAcademicYears() {
-  try {
-    const { data, error } = await supabase.from('academic_years').select('*').order('date_debut', { ascending: false });
-    if (!error && data && data.length > 0) return data as DbAcademicYear[];
-  } catch (e) {
-    console.warn('Fetch fallback academic years:', e);
-  }
-  return MOCK_ACADEMIC_YEARS;
-}
-
-export async function fetchAllStudentParents() {
-  try {
-    const { data, error } = await supabase.from('student_parents').select('*');
-    if (!error && data && data.length > 0) return data as DbStudentParent[];
-  } catch (e) {
-    console.warn('Fetch fallback student parents all:', e);
-  }
-  return MOCK_STUDENT_PARENTS;
-}
-
-export async function fetchUsers() {
-  try {
-    const { data, error } = await supabase.from('users').select('*').order('nom');
-    if (!error && data && data.length > 0) return data;
-  } catch (e) {
-    console.warn('Fetch fallback users:', e);
-  }
-  return MOCK_USERS;
-}
-
-// ── Mutations ─────────────────────────────────────────────────
-
-export async function createStudent(student: {
-  school_id: string;
+export interface StudentInput {
   matricule: string;
   nom: string;
   prenom: string;
   date_naissance: string;
+  classroom_id?: string | null;
+  statut?: 'actif' | 'inactif';
+}
+
+export const fetchStudents = () => apiGet<DbStudent[]>('/students');
+export const fetchStudentById = (id: string) => apiGet<DbStudent>(`/students/${id}`);
+export const createStudent = (student: StudentInput) => apiPost<DbStudent>('/students', student);
+export const updateStudent = (id: string, updates: Partial<StudentInput>) =>
+  apiPatch<DbStudent>(`/students/${id}`, updates);
+export const deleteStudent = (id: string) => apiDelete<void>(`/students/${id}`);
+export const uploadStudentPhoto = (id: string, file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return apiUpload<DbStudent>(`/students/${id}/photo`, formData);
+};
+export const fetchStudentParents = (studentId: string) => apiGet<DbParent[]>(`/students/${studentId}/parents`);
+export const setStudentParents = (studentId: string, parentIds: string[]) =>
+  apiPut<void>(`/students/${studentId}/parents`, { parent_ids: parentIds });
+export const fetchAllStudentParents = () => apiGet<DbStudentParent[]>('/students/parent-links');
+
+// Student documents module is deferred (out of scope for this pass) — no backend route yet.
+export const fetchStudentDocuments = async (_studentId: string) => [] as { id: string; nom: string; type: string; date_ajout: string }[];
+
+export const downloadStudentBulletin = (studentId: string, matricule: string, termId?: string) =>
+  downloadFile(`/students/${studentId}/bulletin.pdf${termId ? `?term_id=${termId}` : ''}`, `bulletin-${matricule}.pdf`);
+
+export const downloadStudentCertificate = (studentId: string, matricule: string) =>
+  downloadFile(`/students/${studentId}/certificate.pdf`, `certificat-scolarite-${matricule}.pdf`);
+
+export const downloadStudentIdCard = (studentId: string, matricule: string) =>
+  downloadFile(`/students/${studentId}/id-card.pdf`, `carte-scolaire-${matricule}.pdf`);
+
+export const exportStudentsCsv = () => downloadFile('/students/export.csv', 'eleves.csv');
+
+export interface StudentImportResult {
+  created: number;
+  errors: { row: number; message: string }[];
+}
+
+export const importStudentsCsv = (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return apiUpload<StudentImportResult>('/students/import', formData);
+};
+
+// ── Parents ───────────────────────────────────────────────────
+
+export interface ParentInput {
+  nom: string;
+  telephone?: string;
+  email?: string | null;
+  adresse?: string;
+  profession?: string;
+  /** Set to grant/reset a login for this parent (requires email above). */
+  password?: string;
+}
+
+export const fetchParents = () => apiGet<DbParent[]>('/parents');
+export const createParent = (parent: ParentInput) => apiPost<DbParent>('/parents', parent);
+export const updateParent = (id: string, updates: Partial<ParentInput>) =>
+  apiPatch<DbParent>(`/parents/${id}`, updates);
+export const deleteParent = (id: string) => apiDelete<void>(`/parents/${id}`);
+
+// ── Cycles & Levels (École → Cycle → Niveau) ─────────────────
+
+export interface CycleInput {
+  nom: string;
+  ordre?: number;
+  evaluation_mode?: 'notes' | 'qualitatif';
+  paiement_horaire?: boolean;
+  moyenne_ponderee?: boolean;
+}
+
+export const fetchCycles = () => apiGet<DbCycle[]>('/cycles');
+export const createCycle = (cycle: CycleInput) => apiPost<DbCycle>('/cycles', cycle);
+export const updateCycle = (id: string, updates: Partial<CycleInput>) => apiPatch<DbCycle>(`/cycles/${id}`, updates);
+export const deleteCycle = (id: string) => apiDelete<void>(`/cycles/${id}`);
+
+export interface LevelInput {
+  cycle_id: string;
+  nom: string;
+  ordre?: number;
+}
+
+export const fetchLevels = () => apiGet<DbLevel[]>('/levels');
+export const createLevel = (level: LevelInput) => apiPost<DbLevel>('/levels', level);
+export const updateLevel = (id: string, updates: Partial<LevelInput>) => apiPatch<DbLevel>(`/levels/${id}`, updates);
+export const deleteLevel = (id: string) => apiDelete<void>(`/levels/${id}`);
+
+// ── Classrooms & Subjects ────────────────────────────────────
+
+export interface ClassroomInput {
+  level_id: string;
+  nom: string;
+  salle?: string;
+  filiere?: string | null;
+  enseignant_principal_id?: string | null;
+}
+
+export const fetchClassrooms = () => apiGet<DbClassroom[]>('/classrooms');
+export const createClassroom = (classroom: ClassroomInput) => apiPost<DbClassroom>('/classrooms', classroom);
+export const updateClassroom = (id: string, updates: Partial<ClassroomInput>) =>
+  apiPatch<DbClassroom>(`/classrooms/${id}`, updates);
+export const deleteClassroom = (id: string) => apiDelete<void>(`/classrooms/${id}`);
+
+export interface SubjectInput {
+  nom: string;
+  coefficient?: number;
+}
+
+export const fetchSubjects = () => apiGet<DbSubject[]>('/subjects');
+export const createSubject = (subject: SubjectInput) => apiPost<DbSubject>('/subjects', subject);
+export const updateSubject = (id: string, updates: Partial<SubjectInput>) =>
+  apiPatch<DbSubject>(`/subjects/${id}`, updates);
+export const deleteSubject = (id: string) => apiDelete<void>(`/subjects/${id}`);
+
+// ── Teachers ──────────────────────────────────────────────────
+
+export interface AssignmentPairInput {
+  subject_id: string;
   classroom_id: string;
-  statut: string;
-}) {
-  try {
-    const { data, error } = await supabase.from('students').insert(student).select().single();
-    if (!error && data) return data;
-  } catch (e) {
-    console.warn('Mutation fallback createStudent:', e);
-  }
-  const newStudent: DbStudent = {
-    id: 's-' + Date.now(),
-    photo: null,
-    ...student,
-  };
-  MOCK_STUDENTS.unshift(newStudent);
-  return newStudent;
 }
 
-export async function updateStudent(id: string, updates: Record<string, unknown>) {
-  try {
-    const { data, error } = await supabase.from('students').update(updates).eq('id', id).select().single();
-    if (!error && data) return data;
-  } catch (e) {
-    console.warn('Mutation fallback updateStudent:', e);
-  }
-  const student = MOCK_STUDENTS.find(s => s.id === id);
-  if (student) {
-    Object.assign(student, updates);
-    return student;
-  }
-  return { id, ...updates };
+export interface TeacherInput {
+  nom: string;
+  prenom: string;
+  email: string;
+  telephone?: string;
+  statut?: 'actif' | 'inactif';
+  assignments?: AssignmentPairInput[];
+  /** Set to grant/reset a login for this teacher. */
+  password?: string;
 }
 
-export async function deleteStudent(id: string) {
-  try {
-    const { error } = await supabase.from('students').delete().eq('id', id);
-    if (!error) return;
-  } catch (e) {
-    console.warn('Mutation fallback deleteStudent:', e);
-  }
-  const idx = MOCK_STUDENTS.findIndex(s => s.id === id);
-  if (idx !== -1) MOCK_STUDENTS.splice(idx, 1);
-}
+export const fetchTeachers = () => apiGet<DbTeacher[]>('/teachers');
+export const createTeacher = (teacher: TeacherInput) => apiPost<DbTeacher>('/teachers', teacher);
+export const updateTeacher = (id: string, updates: Partial<TeacherInput>) =>
+  apiPatch<DbTeacher>(`/teachers/${id}`, updates);
+export const deleteTeacher = (id: string) => apiDelete<void>(`/teachers/${id}`);
 
-export async function createPayment(payment: {
-  school_id: string;
-  invoice_id: string;
-  montant: number;
-  mode_paiement: string;
-  partiel: boolean;
-}) {
-  try {
-    const { data, error } = await supabase.from('payments').insert(payment).select().single();
-    if (!error && data) return data;
-  } catch (e) {
-    console.warn('Mutation fallback createPayment:', e);
-  }
-  const newPay: DbPayment = {
-    id: 'pay-' + Date.now(),
-    date_paiement: new Date().toISOString().split('T')[0],
-    ...payment,
-  };
-  MOCK_PAYMENTS.unshift(newPay);
+// ── Teacher assignments (standalone management) ──────────────
 
-  const inv = MOCK_INVOICES.find(i => i.id === payment.invoice_id);
-  if (inv) {
-    inv.montant_paye += payment.montant;
-    inv.reste_a_payer = Math.max(0, inv.montant_total - inv.montant_paye);
-    inv.statut = inv.reste_a_payer === 0 ? 'paye' : 'partiel';
-  }
-  return newPay;
-}
+export const fetchAssignments = (teacherId?: string) =>
+  apiGet<DbTeacherAssignment[]>(`/assignments${teacherId ? `?teacher_id=${teacherId}` : ''}`);
+export const createAssignment = (assignment: { teacher_id: string; subject_id: string; classroom_id: string; academic_year_id?: string }) =>
+  apiPost<DbTeacherAssignment>('/assignments', assignment);
+export const deleteAssignment = (id: string) => apiDelete<void>(`/assignments/${id}`);
 
-export async function createAnnouncement(announcement: {
-  school_id: string;
-  auteur_id: string;
-  auteur_nom: string;
-  cible: string;
-  titre: string;
-  contenu: string;
-}) {
-  try {
-    const { data, error } = await supabase.from('announcements').insert(announcement).select().single();
-    if (!error && data) return data;
-  } catch (e) {
-    console.warn('Mutation fallback createAnnouncement:', e);
-  }
-  const newAnn: DbAnnouncement = {
-    id: 'ann-' + Date.now(),
-    date_publication: new Date().toISOString().split('T')[0],
-    ...announcement,
-  };
-  MOCK_ANNOUNCEMENTS.unshift(newAnn);
-  return newAnn;
-}
+// ── Attendance ────────────────────────────────────────────────
 
-export async function upsertAttendance(records: {
-  school_id: string;
+export interface AttendanceRecordInput {
   student_id: string;
-  classroom_id: string;
+  classroom_id?: string | null;
   date: string;
-  statut: string;
-}[]) {
-  try {
-    const { data, error } = await supabase.from('attendance').upsert(records, { onConflict: 'student_id,date' }).select();
-    if (!error && data) return data;
-  } catch (e) {
-    console.warn('Mutation fallback upsertAttendance:', e);
-  }
-  records.forEach(r => {
-    const existingIdx = MOCK_ATTENDANCE.findIndex(a => a.student_id === r.student_id && a.date === r.date);
-    if (existingIdx !== -1) {
-      MOCK_ATTENDANCE[existingIdx] = { ...MOCK_ATTENDANCE[existingIdx], ...r };
-    } else {
-      MOCK_ATTENDANCE.push({ id: 'att-' + Date.now() + Math.random(), ...r });
-    }
-  });
-  return records;
+  statut: 'present' | 'absent' | 'retard' | 'justifie';
 }
 
-export async function upsertGrades(records: {
-  school_id: string;
+export function fetchAttendance(params?: { classroom_id?: string; date?: string }) {
+  const query = new URLSearchParams();
+  if (params?.classroom_id) query.set('classroom_id', params.classroom_id);
+  if (params?.date) query.set('date', params.date);
+  const qs = query.toString();
+  return apiGet<DbAttendance[]>(`/attendance${qs ? `?${qs}` : ''}`);
+}
+
+export const upsertAttendance = (records: AttendanceRecordInput[]) =>
+  apiPut<DbAttendance[]>('/attendance', { records });
+
+// ── Evaluation types, Assessments & Grades ───────────────────
+
+export const fetchEvaluationTypes = () => apiGet<DbEvaluationType[]>('/evaluation-types');
+export const createEvaluationType = (nom: string) => apiPost<DbEvaluationType>('/evaluation-types', { nom });
+
+export interface AssessmentInput {
+  subject_id: string;
+  classroom_id: string;
+  term_id: string;
+  evaluation_type_id?: string | null;
+  libelle: string;
+  date: string;
+  coefficient?: number;
+}
+
+export const fetchAssessments = () => apiGet<DbAssessment[]>('/assessments');
+export const createAssessment = (assessment: AssessmentInput) => apiPost<DbAssessment>('/assessments', assessment);
+export const deleteAssessment = (id: string) => apiDelete<void>(`/assessments/${id}`);
+
+export interface GradeRecordInput {
   assessment_id: string;
   student_id: string;
-  note: number;
-  statut_validation: string;
-}[]) {
-  try {
-    const { data, error } = await supabase.from('grades').upsert(records, { onConflict: 'assessment_id,student_id' }).select();
-    if (!error && data) return data;
-  } catch (e) {
-    console.warn('Mutation fallback upsertGrades:', e);
-  }
-  records.forEach(r => {
-    const existingIdx = MOCK_GRADES.findIndex(g => g.assessment_id === r.assessment_id && g.student_id === r.student_id);
-    if (existingIdx !== -1) {
-      MOCK_GRADES[existingIdx] = { ...MOCK_GRADES[existingIdx], ...r };
-    } else {
-      MOCK_GRADES.push({ id: 'g-' + Date.now() + Math.random(), ...r });
-    }
-  });
-  return records;
+  note?: number | null;
+  appreciation?: string | null;
+  statut_validation?: 'brouillon' | 'valide' | 'publie';
 }
+
+export function fetchGrades(params?: { assessment_id?: string }) {
+  const qs = params?.assessment_id ? `?assessment_id=${params.assessment_id}` : '';
+  return apiGet<DbGrade[]>(`/grades${qs}`);
+}
+
+export const upsertGrades = (records: GradeRecordInput[]) => apiPut<DbGrade[]>('/grades', { records });
+
+// ── Invoices & Payments ──────────────────────────────────────
+
+export interface InvoiceInput {
+  student_id: string;
+  type_frais: 'scolarite' | 'inscription' | 'cantine' | 'transport' | 'autre';
+  montant_total: number;
+  date_emission?: string;
+}
+
+export const fetchInvoices = () => apiGet<DbInvoice[]>('/invoices');
+export const createInvoice = (invoice: InvoiceInput) => apiPost<DbInvoice>('/invoices', invoice);
+
+export interface PaymentInput {
+  invoice_id: string;
+  montant: number;
+  mode_paiement: 'especes' | 'cheque' | 'virement' | 'mobile_money' | 'carte_bancaire';
+  date_paiement?: string;
+}
+
+export const fetchPayments = () => apiGet<DbPayment[]>('/payments');
+export const createPayment = (payment: PaymentInput) =>
+  apiPost<{ payment: DbPayment; invoice: DbInvoice }>('/payments', payment);
+export const downloadPaymentReceipt = (paymentId: string) =>
+  downloadFile(`/payments/${paymentId}/receipt.pdf`, `recu-${paymentId.slice(0, 8)}.pdf`);
+
+// ── Academic years / staff / schools ─────────────────────────
+
+export const fetchAcademicYears = () => apiGet<DbAcademicYear[]>('/academic-years');
+export const createAcademicYear = (year: { libelle: string; date_debut: string; date_fin: string; activate?: boolean }) =>
+  apiPost<DbAcademicYear>('/academic-years', year);
+export const activateAcademicYear = (id: string) => apiPost<DbAcademicYear>(`/academic-years/${id}/activate`);
+export const fetchTerms = () => apiGet<DbTerm[]>('/academic-years/terms');
+export const createTerm = (term: { academic_year_id: string; libelle: string; date_debut: string; date_fin: string }) =>
+  apiPost<DbTerm>('/academic-years/terms', term);
+
+export const fetchUsers = () => apiGet<DbUser[]>('/users');
+
+export interface UserCreateInput {
+  nom: string;
+  email: string;
+  password: string;
+  telephone?: string;
+  role: 'school_admin' | 'secretary' | 'accountant' | 'teacher' | 'parent';
+}
+
+export interface UserUpdateInput {
+  nom?: string;
+  telephone?: string;
+  role?: 'school_admin' | 'secretary' | 'accountant';
+  statut?: 'actif' | 'inactif';
+}
+
+export const createUser = (user: UserCreateInput) => apiPost<DbUser>('/users', user);
+export const updateUser = (id: string, updates: UserUpdateInput) => apiPatch<DbUser>(`/users/${id}`, updates);
+export const resetUserPassword = (id: string, newPassword: string) =>
+  apiPost<void>(`/users/${id}/reset-password`, { new_password: newPassword });
+
+export async function fetchSchools(): Promise<DbSchool[]> {
+  const rows = await apiGet<{ id: string; nom: string }[]>('/auth/schools');
+  return rows.map(r => ({
+    id: r.id,
+    nom: r.nom,
+    logo: null,
+    adresse: '',
+    telephone: '',
+    statut_abonnement: '',
+    date_creation: '',
+  }));
+}
+
+/** The logged-in user's own school, with full details — not the bare login/signup picker list. */
+export const fetchMySchool = () => apiGet<DbSchool | null>('/schools/me');
+
+export interface SchoolSelfUpdateInput {
+  nom?: string;
+  adresse?: string;
+  telephone?: string;
+  logo?: string;
+}
+
+export const updateMySchool = (updates: SchoolSelfUpdateInput) => apiPatch<DbSchool>('/schools/me', updates);
+
+export const uploadSchoolLogo = (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return apiUpload<DbSchool>('/schools/me/logo', formData);
+};
+
+// ── Super admin: manage all schools + subscriptions ──────────
+
+export interface DbSchoolAdmin {
+  id: string;
+  nom: string;
+  logo: string | null;
+  adresse: string;
+  telephone: string;
+  statut_abonnement: 'actif' | 'essai' | 'expire';
+  date_creation: string;
+  student_count: number;
+  user_count: number;
+}
+
+export interface SchoolAdminInput {
+  nom: string;
+  adresse?: string;
+  telephone?: string;
+  statut_abonnement?: 'actif' | 'essai' | 'expire';
+}
+
+export const fetchAllSchoolsAdmin = () => apiGet<DbSchoolAdmin[]>('/admin/schools');
+export const createSchoolAdmin = (school: SchoolAdminInput) => apiPost<DbSchoolAdmin>('/admin/schools', school);
+export const updateSchoolAdmin = (id: string, updates: Partial<SchoolAdminInput>) =>
+  apiPatch<DbSchoolAdmin>(`/admin/schools/${id}`, updates);
+
+/** Bootstraps the first school_admin login for a given school (super_admin only). */
+export const createSchoolAdminUser = (schoolId: string, user: { nom: string; email: string; password: string; telephone?: string }) =>
+  apiPost<DbUser>(`/admin/schools/${schoolId}/admin`, { ...user, role: 'school_admin' });
+
+/** Read-only view of every account in a school (all roles). */
+export const fetchSchoolUsers = (schoolId: string) => apiGet<DbUser[]>(`/admin/schools/${schoolId}/users`);
+
+/** CRUD is restricted server-side to that school's own school_admin accounts. */
+export const updateSchoolAdminUser = (schoolId: string, userId: string, updates: { nom?: string; telephone?: string; statut?: 'actif' | 'inactif' }) =>
+  apiPatch<DbUser>(`/admin/schools/${schoolId}/admins/${userId}`, updates);
+export const resetSchoolAdminUserPassword = (schoolId: string, userId: string, newPassword: string) =>
+  apiPost<void>(`/admin/schools/${schoolId}/admins/${userId}/reset-password`, { new_password: newPassword });
+
+// ── Super admins (platform-level accounts, no school_id) ──────
+
+export interface SuperAdminCreateInput {
+  nom: string;
+  email: string;
+  password: string;
+  telephone?: string;
+}
+
+export interface SuperAdminUpdateInput {
+  nom?: string;
+  telephone?: string;
+  statut?: 'actif' | 'inactif';
+}
+
+export const fetchSuperAdmins = () => apiGet<DbUser[]>('/admin/super-admins');
+export const createSuperAdmin = (user: SuperAdminCreateInput) => apiPost<DbUser>('/admin/super-admins', user);
+export const updateSuperAdmin = (id: string, updates: SuperAdminUpdateInput) =>
+  apiPatch<DbUser>(`/admin/super-admins/${id}`, updates);
+export const resetSuperAdminPassword = (id: string, newPassword: string) =>
+  apiPost<void>(`/admin/super-admins/${id}/reset-password`, { new_password: newPassword });
+
+// ── Parent portal (scoped to the logged-in parent's own children) ──
+
+export const fetchMyChildren = () => apiGet<DbStudent[]>('/parent/children');
+export const fetchChildGrades = (studentId: string) => apiGet<DbGrade[]>(`/parent/children/${studentId}/grades`);
+export const fetchChildAssessments = (studentId: string) =>
+  apiGet<DbAssessment[]>(`/parent/children/${studentId}/assessments`);
+export const fetchChildAttendance = (studentId: string) =>
+  apiGet<DbAttendance[]>(`/parent/children/${studentId}/attendance`);
+export const fetchChildInvoices = (studentId: string) =>
+  apiGet<DbInvoice[]>(`/parent/children/${studentId}/invoices`);
+export const fetchChildPayments = (studentId: string) =>
+  apiGet<DbPayment[]>(`/parent/children/${studentId}/payments`);
+export const downloadChildBulletin = (studentId: string, matricule: string, termId?: string) =>
+  downloadFile(`/parent/children/${studentId}/bulletin.pdf${termId ? `?term_id=${termId}` : ''}`, `bulletin-${matricule}.pdf`);
+
+// ── Audit log (school_admin: own school · super_admin: platform-level entries) ──
+
+export interface DbAuditLogEntry {
+  id: string;
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  old_value: string | null;
+  new_value: string | null;
+  created_at: string;
+  actor_nom: string | null;
+  actor_email: string | null;
+}
+
+export const fetchAuditLogs = (params: { limit?: number; offset?: number; action?: string; entity_type?: string } = {}) => {
+  const qs = new URLSearchParams();
+  if (params.limit) qs.set('limit', String(params.limit));
+  if (params.offset) qs.set('offset', String(params.offset));
+  if (params.action) qs.set('action', params.action);
+  if (params.entity_type) qs.set('entity_type', params.entity_type);
+  const query = qs.toString();
+  return apiGet<{ total: number; items: DbAuditLogEntry[] }>(`/audit-logs${query ? `?${query}` : ''}`);
+};
+
+// Notifications (SMS/email delivery log) remain out of scope — no backend route yet.
+export const fetchNotifications = async () => [] as {
+  id: string;
+  school_id: string;
+  type: string;
+  destinataire_id: string;
+  canal: string;
+  message: string;
+  statut: string;
+  date: string;
+}[];
+
+export interface DbAnnouncement {
+  id: string;
+  school_id: string;
+  auteur_id: string | null;
+  auteur_nom: string;
+  cible: 'tous' | 'parents' | 'enseignants' | 'classe';
+  titre: string;
+  contenu: string;
+  date_publication: string;
+}
+
+export interface AnnouncementInput {
+  titre: string;
+  contenu: string;
+  cible: 'tous' | 'parents' | 'enseignants' | 'classe';
+}
+
+export const fetchAnnouncements = () => apiGet<DbAnnouncement[]>('/announcements');
+export const createAnnouncement = (announcement: AnnouncementInput) => apiPost<DbAnnouncement>('/announcements', announcement);
+export const deleteAnnouncement = (id: string) => apiDelete<void>(`/announcements/${id}`);
+
+// ── Reports export ────────────────────────────────────────────
+
+export const downloadReportPdf = (type: 'financial' | 'attendance' | 'grades', dateFrom?: string, dateTo?: string) => {
+  const qs = new URLSearchParams({ type });
+  if (dateFrom) qs.set('date_from', dateFrom);
+  if (dateTo) qs.set('date_to', dateTo);
+  return downloadFile(`/reports/export.pdf?${qs.toString()}`, `rapport-${type}.pdf`);
+};
+
+export interface DeliberationRow {
+  student_id: string;
+  nom: string;
+  prenom: string;
+  matricule: string;
+  moyenne: number | null;
+  decision: 'admis' | 'echoue' | 'absent';
+  rang: number | null;
+}
+
+export interface DeliberationReport {
+  classroom_id: string;
+  classroom_nom: string;
+  term_id: string | null;
+  seuil: number;
+  resultats: DeliberationRow[];
+  nb_admis: number;
+  nb_echoue: number;
+  nb_absent: number;
+  moyenne_classe: number | null;
+  moyenne_ponderee: boolean;
+}
+
+export const fetchDeliberation = (classroomId: string, termId?: string, seuil = 10) => {
+  const qs = new URLSearchParams({ classroom_id: classroomId, seuil: String(seuil) });
+  if (termId) qs.set('term_id', termId);
+  return apiGet<DeliberationReport>(`/reports/deliberation?${qs.toString()}`);
+};
+
+export type Weekday = 'lundi' | 'mardi' | 'mercredi' | 'jeudi' | 'vendredi' | 'samedi';
+
+export interface DbTimetableSlot {
+  id: string;
+  school_id: string;
+  assignment_id: string;
+  jour: Weekday;
+  heure_debut: string;
+  heure_fin: string;
+  salle: string | null;
+}
+
+export const fetchTimetable = (classroomId?: string) =>
+  apiGet<DbTimetableSlot[]>(`/timetable${classroomId ? `?classroom_id=${classroomId}` : ''}`);
+
+export const createTimetableSlot = (slot: { assignment_id: string; jour: Weekday; heure_debut: string; heure_fin: string; salle?: string | null }) =>
+  apiPost<DbTimetableSlot>('/timetable', slot);
+
+export const updateTimetableSlot = (id: string, slot: Partial<{ assignment_id: string; jour: Weekday; heure_debut: string; heure_fin: string; salle: string | null }>) =>
+  apiPatch<DbTimetableSlot>(`/timetable/${id}`, slot);
+
+export const deleteTimetableSlot = (id: string) => apiDelete<void>(`/timetable/${id}`);
+
+export interface DbHourlyRate {
+  id: string;
+  school_id: string;
+  teacher_id: string;
+  academic_year_id: string;
+  taux: number;
+}
+
+export const fetchHourlyRates = () => apiGet<DbHourlyRate[]>('/teaching-sessions/rates');
+export const upsertHourlyRate = (teacherId: string, taux: number) =>
+  apiPost<DbHourlyRate>('/teaching-sessions/rates', { teacher_id: teacherId, taux });
+
+export type TeachingSessionStatus = 'en_cours' | 'termine';
+
+export interface DbTeachingSession {
+  id: string;
+  school_id: string;
+  timetable_slot_id: string;
+  date: string;
+  started_at: string;
+  ended_at: string | null;
+  duree_reelle: number | null;
+  statut: TeachingSessionStatus;
+}
+
+export const fetchTeachingSessions = () => apiGet<DbTeachingSession[]>('/teaching-sessions');
+export const startTeachingSession = (timetableSlotId: string) =>
+  apiPost<DbTeachingSession>('/teaching-sessions/start', { timetable_slot_id: timetableSlotId });
+export const endTeachingSession = (sessionId: string) =>
+  apiPost<DbTeachingSession>(`/teaching-sessions/${sessionId}/end`);
+
+export interface TeacherHoursReportRow {
+  teacher_id: string;
+  nom: string;
+  prenom: string;
+  nb_seances: number;
+  total_heures: number;
+  taux: number;
+  montant: number;
+}
+
+export interface TeacherHoursReport {
+  mois: number;
+  annee: number;
+  lignes: TeacherHoursReportRow[];
+  total_heures: number;
+  total_montant: number;
+}
+
+export const fetchHoursReport = (mois?: number, annee?: number) => {
+  const qs = new URLSearchParams();
+  if (mois) qs.set('mois', String(mois));
+  if (annee) qs.set('annee', String(annee));
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  return apiGet<TeacherHoursReport>(`/teaching-sessions/report${suffix}`);
+};
+
+export interface BusinessOverview {
+  academic_year_label: string | null;
+  revenue: {
+    current_month: number;
+    previous_month: number;
+    trend_pct: number | null;
+    collection_rate_pct: number | null;
+    total_invoiced: number;
+    total_collected: number;
+    total_outstanding: number;
+    revenue_per_student: number | null;
+    monthly_trend: { mois: string; montant: number }[];
+    by_fee_type: { type_frais: string; montant: number }[];
+  };
+  enrollment: {
+    current_total: number;
+    previous_total: number;
+    growth_pct: number | null;
+    attrition_pct: number | null;
+    new_enrollments: number;
+    by_cycle: { cycle: string; actuel: number; precedent: number }[];
+    has_previous_year: boolean;
+  };
+  staffing: {
+    active_teachers: number;
+    student_teacher_ratio: number | null;
+    hourly_cost_this_month: number | null;
+  };
+  alerts: string[];
+}
+
+export const fetchBusinessOverview = () => apiGet<BusinessOverview>('/reports/business-overview');
 
 // ── Helpers ───────────────────────────────────────────────────
 
 export function formatMoney(amount: number): string {
   return new Intl.NumberFormat('fr-FR').format(amount) + ' FC';
+}
+
+/** Compact form for space-constrained UI (stat tiles): 230000 -> "230 k FC". */
+export function formatMoneyCompact(amount: number): string {
+  return new Intl.NumberFormat('fr-FR', { notation: 'compact', maximumFractionDigits: 1 }).format(amount) + ' FC';
 }

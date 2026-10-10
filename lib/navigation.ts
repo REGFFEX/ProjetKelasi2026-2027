@@ -8,10 +8,9 @@ export interface NavItem {
 
 export const navItemsByRole: Record<Role, NavItem[]> = {
   super_admin: [
-    { label: 'Tableau de bord', href: '/dashboard', icon: 'LayoutDashboard' },
     { label: 'Écoles', href: '/schools', icon: 'School' },
     { label: 'Abonnements', href: '/subscriptions', icon: 'CreditCard' },
-    { label: 'Paramètres', href: '/settings', icon: 'Settings' },
+    { label: 'Administrateurs', href: '/super-admins', icon: 'ShieldCheck' },
   ],
   school_admin: [
     { label: 'Tableau de bord', href: '/dashboard', icon: 'LayoutDashboard' },
@@ -19,9 +18,11 @@ export const navItemsByRole: Record<Role, NavItem[]> = {
     { label: 'Parents', href: '/parents', icon: 'Users' },
     { label: 'Enseignants', href: '/teachers', icon: 'UserCog' },
     { label: 'Classes', href: '/classes', icon: 'School' },
+    { label: 'Emploi du temps', href: '/timetable', icon: 'CalendarDays' },
     { label: 'Présences', href: '/attendance', icon: 'CheckSquare' },
     { label: 'Notes', href: '/grades', icon: 'ClipboardList' },
     { label: 'Paiements', href: '/payments', icon: 'Wallet' },
+    { label: 'Suivi des heures', href: '/hours', icon: 'Clock' },
     { label: 'Communication', href: '/communication', icon: 'MessageSquare' },
     { label: 'Paramètres', href: '/settings', icon: 'Settings' },
   ],
@@ -29,24 +30,32 @@ export const navItemsByRole: Record<Role, NavItem[]> = {
     { label: 'Tableau de bord', href: '/dashboard', icon: 'LayoutDashboard' },
     { label: 'Élèves', href: '/students', icon: 'GraduationCap' },
     { label: 'Parents', href: '/parents', icon: 'Users' },
+    { label: 'Enseignants', href: '/teachers', icon: 'UserCog' },
     { label: 'Classes', href: '/classes', icon: 'School' },
+    { label: 'Emploi du temps', href: '/timetable', icon: 'CalendarDays' },
+    { label: 'Présences', href: '/attendance', icon: 'CheckSquare' },
+    { label: 'Notes', href: '/grades', icon: 'ClipboardList' },
+    { label: 'Suivi des heures', href: '/hours', icon: 'Clock' },
+    { label: 'Rapports', href: '/reports', icon: 'BarChart3' },
     { label: 'Communication', href: '/communication', icon: 'MessageSquare' },
+    { label: 'Paramètres', href: '/settings', icon: 'Settings' },
   ],
   accountant: [
     { label: 'Tableau de bord', href: '/dashboard', icon: 'LayoutDashboard' },
     { label: 'Paiements', href: '/payments', icon: 'Wallet' },
     { label: 'Élèves', href: '/students', icon: 'GraduationCap' },
+    { label: 'Suivi des heures', href: '/hours', icon: 'Clock' },
     { label: 'Rapports', href: '/reports', icon: 'BarChart3' },
   ],
   teacher: [
-    { label: 'Tableau de bord', href: '/dashboard', icon: 'LayoutDashboard' },
+    { label: 'Accueil', href: '/dashboard', icon: 'LayoutDashboard' },
     { label: 'Mes classes', href: '/classes', icon: 'School' },
+    { label: 'Mes horaires', href: '/timetable', icon: 'CalendarDays' },
     { label: 'Présences', href: '/attendance', icon: 'CheckSquare' },
     { label: 'Notes', href: '/grades', icon: 'ClipboardList' },
-    { label: 'Communication', href: '/communication', icon: 'MessageSquare' },
   ],
   parent: [
-    { label: 'Accueil', href: '/dashboard', icon: 'Home' },
+    { label: 'Accueil', href: '/parent', icon: 'Home' },
     { label: 'Mes enfants', href: '/parent/students', icon: 'GraduationCap' },
     { label: 'Paiements', href: '/parent/payments', icon: 'Wallet' },
     { label: 'Bulletins', href: '/parent/bulletins', icon: 'FileText' },
@@ -66,6 +75,7 @@ export const roleLabels: Record<Role, string> = {
 export function getDefaultRouteForRole(role?: Role): string {
   switch (role) {
     case 'super_admin':
+      return '/schools';
     case 'school_admin':
       return '/dashboard';
     case 'secretary':
@@ -73,8 +83,9 @@ export function getDefaultRouteForRole(role?: Role): string {
     case 'accountant':
       return '/payments';
     case 'teacher':
-      return '/classes';
+      return '/dashboard';
     case 'parent':
+      return '/parent';
     default:
       return '/dashboard';
   }

@@ -1,0 +1,18 @@
+# Replace with your real domain(s). Caddy handles TLS (Let's Encrypt) automatically.
+kelasi.example.com {
+    # API routes go to the backend (FastAPI/gunicorn on 127.0.0.1:8000)
+    handle /api/* {
+        reverse_proxy 127.0.0.1:8000
+    }
+
+    # Everything else goes to the frontend (Next.js on 127.0.0.1:3000)
+    handle {
+        reverse_proxy 127.0.0.1:3000
+    }
+
+    encode gzip
+
+    log {
+        output file /var/log/caddy/kelasi.log
+    }
+}

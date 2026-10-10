@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Bell, Megaphone, Send, CheckCircle, Clock, XCircle, Mail, MessageSquare, Smartphone, Loader2 } from 'lucide-react';
-import { fetchAnnouncements, fetchNotifications } from '@/lib/api';
+import { Plus, Bell, Megaphone, Send, CheckCircle, Clock, XCircle, Mail, MessageSquare, Smartphone, Trash2, Loader2 } from 'lucide-react';
+import { fetchAnnouncements, fetchNotifications, createAnnouncement, deleteAnnouncement } from '@/lib/api';
+import { ApiError } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth-context';
 import type { AnnouncementTarget, NotificationType } from '@/lib/types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -41,10 +43,16 @@ const statutConfig = {
 
 type Tab = 'announcements' | 'notifications';
 
+const canManageAnnouncements = (role?: string) => role === 'school_admin' || role === 'secretary';
+
 export function CommunicationContent() {
+  const { profile } = useAuth();
   const [tab, setTab] = useState<Tab>('announcements');
   const [showForm, setShowForm] = useState(false);
   const [newAnnouncement, setNewAnnouncement] = useState({ titre: '', contenu: '', cible: 'tous' as AnnouncementTarget });
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [announcements, setAnnouncements] = useState<Awaited<ReturnType<typeof fetchAnnouncements>>>([]);
@@ -67,6 +75,34 @@ export function CommunicationContent() {
     return () => { cancelled = true; };
   }, []);
 
+  const handlePublish = async () => {
+    if (!newAnnouncement.titre.trim() || !newAnnouncement.contenu.trim()) return;
+    setPublishing(true);
+    setPublishError('');
+    try {
+      const created = await createAnnouncement(newAnnouncement);
+      setAnnouncements(prev => [created, ...prev]);
+      setNewAnnouncement({ titre: '', contenu: '', cible: 'tous' });
+      setShowForm(false);
+    } catch (e) {
+      setPublishError(e instanceof ApiError ? e.message : "Échec de la publication.");
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    setDeletingId(id);
+    try {
+      await deleteAnnouncement(id);
+      setAnnouncements(prev => prev.filter(a => a.id !== id));
+    } catch (e) {
+      console.error('Failed to delete announcement:', e);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -82,13 +118,15 @@ export function CommunicationContent() {
           <h1 className="text-xl sm:text-2xl font-bold text-foreground">Communication</h1>
           <p className="text-muted-foreground mt-1 truncate">Annonces et notifications</p>
         </div>
-        <Button className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform" onClick={() => setShowForm(!showForm)}>
-          <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nouvelle annonce</span>
-        </Button>
+        {canManageAnnouncements(profile?.role) && (
+          <Button className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform" onClick={() => setShowForm(!showForm)}>
+            <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nouvelle annonce</span>
+          </Button>
+        )}
       </div>
 
       {/* New announcement form */}
-      {showForm && (
+      {showForm && canManageAnnouncements(profile?.role) && (
         <Card className="p-4 sm:p-5 rounded-2xl shadow-card animate-scale-in">
           <h3 className="font-semibold text-foreground mb-4">Nouvelle annonce</h3>
           <div className="space-y-4">
@@ -126,10 +164,16 @@ export function CommunicationContent() {
                 ))}
               </select>
             </div>
+            {publishError && (
+              <div className="rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive">{publishError}</div>
+            )}
             <div className="flex justify-end gap-3">
               <Button variant="outline" className="rounded-xl active:scale-[0.97] transition-transform" onClick={() => setShowForm(false)}>Annuler</Button>
-              <Button className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform" onClick={() => setShowForm(false)}>
-                <Send className="h-4 w-4" /> Publier
+              <Button
+                className="gap-1.5 rounded-xl active:scale-[0.97] transition-transform" onClick={handlePublish}
+                disabled={publishing || !newAnnouncement.titre.trim() || !newAnnouncement.contenu.trim()}
+              >
+                {publishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Publier
               </Button>
             </div>
           </div>
@@ -169,7 +213,17 @@ export function CommunicationContent() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
                     <h3 className="font-semibold text-foreground truncate">{a.titre}</h3>
-                    <Badge variant="secondary" className="shrink-0 badge-modern">{targetLabels[a.cible as AnnouncementTarget]}</Badge>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge variant="secondary" className="badge-modern">{targetLabels[a.cible as AnnouncementTarget]}</Badge>
+                      {canManageAnnouncements(profile?.role) && (
+                        <Button
+                          variant="ghost" size="sm" onClick={() => handleDelete(a.id)} disabled={deletingId === a.id}
+                          className="h-7 w-7 p-0 rounded-lg text-destructive active:scale-95 transition-transform"
+                        >
+                          {deletingId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed line-clamp-3">{a.contenu}</p>
                   <div className="flex items-center gap-2 sm:gap-3 mt-3 text-xs text-muted-foreground">
@@ -182,6 +236,9 @@ export function CommunicationContent() {
               </div>
             </Card>
           ))}
+          {announcements.length === 0 && (
+            <p className="text-sm text-muted-foreground py-6 text-center">Aucune annonce pour le moment.</p>
+          )}
         </div>
       )}
 

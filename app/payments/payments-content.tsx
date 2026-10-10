@@ -2,13 +2,33 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { Wallet, Plus, Search, Download, FileText, ArrowLeft, Save, CreditCard, TrendingUp, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
-import { fetchInvoices, fetchPayments, fetchStudents, fetchClassrooms, formatMoney } from '@/lib/api';
-import type { PaymentMethod } from '@/lib/types';
+import { fetchInvoices, fetchPayments, fetchStudents, fetchClassrooms, formatMoney, createPayment, createInvoice, downloadPaymentReceipt } from '@/lib/api';
+import { ApiError, assetUrl } from '@/lib/api-client';
+import type { PaymentMethod, FeeType } from '@/lib/types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/lib/auth-context';
+import { canWrite } from '@/lib/permissions';
+
+const feeTypeLabels: Record<FeeType, string> = {
+  scolarite: 'Scolarité',
+  inscription: 'Inscription',
+  cantine: 'Cantine',
+  transport: 'Transport',
+  autre: 'Autre',
+};
+
+const emptyInvoiceForm = { student_id: '', type_frais: 'scolarite' as FeeType, montant_total: '', date_emission: new Date().toISOString().split('T')[0] };
 
 const statusConfig = {
   paye: { label: 'Payé', color: 'text-success', bg: 'bg-success/10', dot: 'bg-success' },
@@ -26,17 +46,28 @@ const methodLabels: Record<PaymentMethod, string> = {
   cheque: 'Chèque',
   virement: 'Virement',
   mobile_money: 'Mobile Money',
+  carte_bancaire: 'Carte bancaire',
 };
 
 type View = 'list' | 'payment' | 'receipt';
 
 export function PaymentsContent() {
+  const { profile } = useAuth();
+  const canManage = canWrite(profile?.role, 'payments');
   const [view, setView] = useState<View>('list');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedInvoice, setSelectedInvoice] = useState<Awaited<ReturnType<typeof fetchInvoices>>[number] | null>(null);
+  const [lastPaymentId, setLastPaymentId] = useState<string | null>(null);
+  const [downloadingReceipt, setDownloadingReceipt] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('especes');
+  const [submittingPayment, setSubmittingPayment] = useState(false);
+  const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
+  const [invoiceForm, setInvoiceForm] = useState(emptyInvoiceForm);
+  const [studentQuery, setStudentQuery] = useState('');
+  const [savingInvoice, setSavingInvoice] = useState(false);
+  const [invoiceError, setInvoiceError] = useState('');
 
   const [loading, setLoading] = useState(true);
   const [invoices, setInvoices] = useState<Awaited<ReturnType<typeof fetchInvoices>>>([]);
@@ -68,6 +99,14 @@ export function PaymentsContent() {
     return () => { cancelled = true; };
   }, []);
 
+  const studentMatches = useMemo(() => {
+    const q = studentQuery.trim().toLowerCase();
+    const list = q
+      ? students.filter(s => `${s.prenom} ${s.nom} ${s.nom} ${s.prenom} ${s.matricule}`.toLowerCase().includes(q))
+      : students;
+    return list.slice(0, 30);
+  }, [students, studentQuery]);
+
   const getStudentName = (id: string) => {
     const s = students.find(s => s.id === id);
     return s ? `${s.prenom} ${s.nom}` : 'Inconnu';
@@ -94,6 +133,31 @@ export function PaymentsContent() {
     setView('payment');
   };
 
+  const handleCreateInvoice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const montant = parseFloat(invoiceForm.montant_total);
+    if (!invoiceForm.student_id) { setInvoiceError('Choisissez un élève dans la liste.'); return; }
+    if (!montant || montant <= 0) return;
+    setSavingInvoice(true);
+    setInvoiceError('');
+    try {
+      const created = await createInvoice({
+        student_id: invoiceForm.student_id,
+        type_frais: invoiceForm.type_frais,
+        montant_total: montant,
+        date_emission: invoiceForm.date_emission,
+      });
+      setInvoices(prev => [created, ...prev]);
+      setShowInvoiceDialog(false);
+      setInvoiceForm(emptyInvoiceForm);
+      setStudentQuery('');
+    } catch (err) {
+      setInvoiceError(err instanceof ApiError ? err.message : "Échec de la création de la facture.");
+    } finally {
+      setSavingInvoice(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -111,10 +175,96 @@ export function PaymentsContent() {
             <h1 className="text-xl sm:text-2xl font-bold text-foreground">Paiements</h1>
             <p className="text-sm text-muted-foreground mt-0.5">Gérez les factures, paiements et reçus</p>
           </div>
-          <Button className="gap-1.5 rounded-xl active:scale-[0.97] shrink-0">
-            <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nouvelle facture</span>
-          </Button>
+          {canManage && (
+            <Button onClick={() => setShowInvoiceDialog(true)} className="gap-1.5 rounded-xl active:scale-[0.97] shrink-0">
+              <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nouvelle facture</span>
+            </Button>
+          )}
         </div>
+
+        <Dialog open={showInvoiceDialog} onOpenChange={(open) => { setShowInvoiceDialog(open); if (!open) { setInvoiceForm(emptyInvoiceForm); setInvoiceError(''); setStudentQuery(''); } }}>
+          <DialogContent className="rounded-2xl">
+            <DialogHeader>
+              <DialogTitle>Nouvelle facture</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleCreateInvoice} className="space-y-3">
+              <div>
+                <Label htmlFor="inv-student">Élève *</Label>
+                {invoiceForm.student_id ? (
+                  <div className="mt-1.5 flex items-center justify-between gap-3 rounded-xl border border-input bg-muted/30 px-3 py-2 text-sm">
+                    <span className="truncate font-medium text-foreground">{getStudentName(invoiceForm.student_id)}</span>
+                    <button
+                      type="button"
+                      onClick={() => { setInvoiceForm({ ...invoiceForm, student_id: '' }); setStudentQuery(''); }}
+                      className="shrink-0 text-xs font-medium text-primary hover:underline"
+                    >
+                      Changer
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-1.5">
+                    <Input
+                      id="inv-student" value={studentQuery} onChange={e => setStudentQuery(e.target.value)}
+                      placeholder="Rechercher par nom, prénom ou matricule…" autoComplete="off" className="rounded-xl"
+                    />
+                    <div className="mt-1.5 max-h-48 overflow-y-auto rounded-xl border border-border bg-background scrollbar-thin">
+                      {studentMatches.map(s => (
+                        <button
+                          key={s.id} type="button"
+                          onClick={() => setInvoiceForm({ ...invoiceForm, student_id: s.id })}
+                          className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-muted/50 transition-colors"
+                        >
+                          <span className="truncate">{s.prenom} {s.nom}</span>
+                          <span className="shrink-0 font-mono text-xs text-muted-foreground">{s.matricule}</span>
+                        </button>
+                      ))}
+                      {studentMatches.length === 0 && (
+                        <p className="px-3 py-3 text-sm text-muted-foreground">Aucun élève trouvé.</p>
+                      )}
+                    </div>
+                    {studentQuery.trim() === '' && students.length > 8 && (
+                      <p className="mt-1 text-xs text-muted-foreground">{students.length} élèves — tapez pour affiner.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="inv-type">Type de frais *</Label>
+                  <select
+                    id="inv-type" value={invoiceForm.type_frais} onChange={e => setInvoiceForm({ ...invoiceForm, type_frais: e.target.value as FeeType })}
+                    className="mt-1.5 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    {(Object.keys(feeTypeLabels) as FeeType[]).map(ft => <option key={ft} value={ft}>{feeTypeLabels[ft]}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="inv-montant">Montant (FC) *</Label>
+                  <Input
+                    id="inv-montant" type="number" min={1} value={invoiceForm.montant_total}
+                    onChange={e => setInvoiceForm({ ...invoiceForm, montant_total: e.target.value })} required
+                    className="mt-1.5 rounded-xl"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="inv-date">Date d'émission</Label>
+                <Input
+                  id="inv-date" type="date" value={invoiceForm.date_emission}
+                  onChange={e => setInvoiceForm({ ...invoiceForm, date_emission: e.target.value })}
+                  className="mt-1.5 rounded-xl"
+                />
+              </div>
+              {invoiceError && <p className="text-xs text-destructive">{invoiceError}</p>}
+              <DialogFooter>
+                <Button type="submit" disabled={savingInvoice} className="gap-1.5 rounded-xl">
+                  {savingInvoice ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  Créer
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
 
         {/* Summary cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
@@ -200,9 +350,13 @@ export function PaymentsContent() {
                     <tr key={inv.id} className="hover:bg-muted/30 transition-colors">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-primary/15 to-info/10 text-primary text-xs font-semibold shrink-0">
-                            {initials}
-                          </div>
+                          {student?.photo ? (
+                            <img src={assetUrl(student.photo)} alt="" className="h-9 w-9 rounded-full object-cover shrink-0 border border-border" />
+                          ) : (
+                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-primary/15 to-info/10 text-primary text-xs font-semibold shrink-0">
+                              {initials}
+                            </div>
+                          )}
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-foreground truncate max-w-[180px]">{getStudentName(inv.student_id)}</p>
                             <p className="text-xs text-muted-foreground truncate">{getClassroomName(student?.classroom_id || '')}</p>
@@ -221,11 +375,20 @@ export function PaymentsContent() {
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
                         {inv.reste_a_payer > 0 ? (
-                          <Button size="sm" variant="outline" className="gap-1.5 rounded-xl active:scale-[0.97]" onClick={() => handlePayment(inv)}>
-                            <Wallet className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Payer</span>
-                          </Button>
+                          canManage && (
+                            <Button size="sm" variant="outline" className="gap-1.5 rounded-xl active:scale-[0.97]" onClick={() => handlePayment(inv)}>
+                              <Wallet className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Payer</span>
+                            </Button>
+                          )
                         ) : (
-                          <Button size="sm" variant="ghost" className="gap-1.5 rounded-xl active:scale-[0.97]" onClick={() => { setSelectedInvoice(inv); setView('receipt'); }}>
+                          <Button
+                            size="sm" variant="ghost" className="gap-1.5 rounded-xl active:scale-[0.97]"
+                            onClick={() => {
+                              setSelectedInvoice(inv);
+                              setLastPaymentId(payments.find(p => p.invoice_id === inv.id)?.id || null);
+                              setView('receipt');
+                            }}
+                          >
                             <FileText className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Reçu</span>
                           </Button>
                         )}
@@ -247,9 +410,13 @@ export function PaymentsContent() {
             return (
               <Card key={inv.id} className="p-4 rounded-2xl shadow-card hover:shadow-card-hover transition-shadow">
                 <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-primary/15 to-info/10 text-primary text-sm font-semibold shrink-0">
-                    {initials}
-                  </div>
+                  {student?.photo ? (
+                    <img src={assetUrl(student.photo)} alt="" className="h-10 w-10 rounded-full object-cover shrink-0 border border-border" />
+                  ) : (
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-primary/15 to-info/10 text-primary text-sm font-semibold shrink-0">
+                      {initials}
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
@@ -275,7 +442,7 @@ export function PaymentsContent() {
                         <p className="text-sm font-medium text-destructive truncate">{formatMoney(inv.reste_a_payer)}</p>
                       </div>
                     </div>
-                    {inv.reste_a_payer > 0 && (
+                    {inv.reste_a_payer > 0 && canManage && (
                       <Button size="sm" className="w-full mt-3 gap-1.5 rounded-xl active:scale-[0.97]" onClick={() => handlePayment(inv)}>
                         <Wallet className="h-3.5 w-3.5" /> Enregistrer un paiement
                       </Button>
@@ -296,6 +463,27 @@ export function PaymentsContent() {
     const newReste = selectedInvoice.reste_a_payer - amount;
     const isPartial = amount < selectedInvoice.reste_a_payer && amount > 0;
     const exceedsReste = amount > selectedInvoice.reste_a_payer;
+
+    const handleSubmitPayment = async () => {
+      if (exceedsReste || amount <= 0) return;
+      setSubmittingPayment(true);
+      try {
+        const result = await createPayment({
+          invoice_id: selectedInvoice.id,
+          montant: amount,
+          mode_paiement: paymentMethod,
+        });
+        setInvoices(prev => prev.map(inv => (inv.id === result.invoice.id ? result.invoice : inv)));
+        setPayments(prev => [result.payment, ...prev]);
+        setSelectedInvoice(result.invoice);
+        setLastPaymentId(result.payment.id);
+        setView('receipt');
+      } catch (e) {
+        console.error('Failed to record payment:', e);
+      } finally {
+        setSubmittingPayment(false);
+      }
+    };
 
     return (
       <div className="max-w-2xl mx-auto space-y-5 sm:space-y-6 animate-fade-in">
@@ -404,8 +592,9 @@ export function PaymentsContent() {
 
             <div className="flex items-center justify-end gap-3">
               <Button variant="outline" className="rounded-xl active:scale-[0.97]" onClick={() => setView('list')}>Annuler</Button>
-              <Button className="gap-1.5 rounded-xl active:scale-[0.97]" disabled={exceedsReste || amount <= 0} onClick={() => setView('receipt')}>
-                <Save className="h-4 w-4" /> <span className="hidden sm:inline">Enregistrer & générer le reçu</span><span className="sm:hidden">Enregistrer</span>
+              <Button className="gap-1.5 rounded-xl active:scale-[0.97]" disabled={exceedsReste || amount <= 0 || submittingPayment} onClick={handleSubmitPayment}>
+                {submittingPayment ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                <span className="hidden sm:inline">Enregistrer & générer le reçu</span><span className="sm:hidden">Enregistrer</span>
               </Button>
             </div>
           </div>
@@ -419,14 +608,30 @@ export function PaymentsContent() {
     const student = students.find(s => s.id === selectedInvoice.student_id);
     const invoicePayments = payments.filter(p => p.invoice_id === selectedInvoice.id);
 
+    const handleDownloadReceipt = async () => {
+      if (!lastPaymentId) return;
+      setDownloadingReceipt(true);
+      try {
+        await downloadPaymentReceipt(lastPaymentId);
+      } catch (e) {
+        console.error('Failed to download receipt:', e);
+      } finally {
+        setDownloadingReceipt(false);
+      }
+    };
+
     return (
       <div className="max-w-2xl mx-auto space-y-5 sm:space-y-6 animate-fade-in">
         <div className="flex items-center justify-between gap-3">
           <Button variant="ghost" size="sm" className="gap-1.5 rounded-xl active:scale-[0.97] shrink-0" onClick={() => setView('list')}>
             <ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">Retour</span>
           </Button>
-          <Button className="gap-1.5 rounded-xl active:scale-[0.97] shrink-0">
-            <Download className="h-4 w-4" /> <span className="hidden sm:inline">Télécharger PDF</span>
+          <Button
+            className="gap-1.5 rounded-xl active:scale-[0.97] shrink-0" onClick={handleDownloadReceipt}
+            disabled={!lastPaymentId || downloadingReceipt}
+          >
+            {downloadingReceipt ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            <span className="hidden sm:inline">Télécharger PDF</span>
           </Button>
         </div>
 
