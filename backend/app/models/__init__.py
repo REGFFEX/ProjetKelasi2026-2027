@@ -17,6 +17,7 @@ from app.models.operations import Attendance, EvaluationType, Assessment, Grade
 from app.models.finance import Invoice, Payment
 from app.models.audit import AuditLog
 from app.models.communication import Announcement, AnnouncementTarget
+from app.models.desktop_sync import DesktopDevice, DesktopLinkCode, DesktopSyncRecord
 
 __all__ = [
     "Base",
@@ -47,4 +48,7 @@ __all__ = [
     "AuditLog",
     "Announcement",
     "AnnouncementTarget",
+    "DesktopDevice",
+    "DesktopLinkCode",
+    "DesktopSyncRecord",
 ]

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { School, Users, Calendar, Save, Upload, Shield, UserCog, Calculator, BookOpen, Mail, Lock, Bell, Loader2, CheckCircle2, Layers, Plus, Pencil, Trash2, GraduationCap, Power, ScrollText, ChevronLeft, ChevronRight } from 'lucide-react';
+import { School, Users, Calendar, Save, Upload, Shield, UserCog, Calculator, BookOpen, Mail, Lock, Bell, Loader2, CheckCircle2, Layers, Plus, Pencil, Trash2, GraduationCap, Power, ScrollText, ChevronLeft, ChevronRight, Monitor } from 'lucide-react';
 import {
   fetchMySchool,
   updateMySchool,
@@ -47,6 +47,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { DesktopSyncTab } from './desktop-sync-tab';
 
 const emptyYearForm = { libelle: '', date_debut: '', date_fin: '', activate: false };
 const emptyTermForm = { academic_year_id: '', libelle: '', date_debut: '', date_fin: '' };
@@ -66,7 +67,7 @@ const editableRoles: { value: 'school_admin' | 'secretary' | 'accountant'; label
   { value: 'accountant', label: 'Comptable' },
 ];
 
-type Tab = 'school' | 'hierarchy' | 'users' | 'years' | 'audit' | 'security';
+type Tab = 'school' | 'hierarchy' | 'users' | 'years' | 'audit' | 'desktop' | 'security';
 
 const allTabs = [
   { id: 'school' as Tab, label: 'Établissement', icon: School },
@@ -74,6 +75,7 @@ const allTabs = [
   { id: 'users' as Tab, label: 'Utilisateurs', icon: Users },
   { id: 'years' as Tab, label: 'Années scolaires', icon: Calendar },
   { id: 'audit' as Tab, label: 'Journal', icon: ScrollText },
+  { id: 'desktop' as Tab, label: 'Postes desktop', icon: Monitor },
   { id: 'security' as Tab, label: 'Sécurité', icon: Shield },
 ];
 
@@ -1213,6 +1215,8 @@ export function SettingsContent() {
           )}
         </Card>
       )}
+
+      {tab === 'desktop' && <DesktopSyncTab />}
 
       {tab === 'security' && (
         <div className="max-w-2xl space-y-4 sm:space-y-6">

@@ -30,6 +30,7 @@ from app.routers import (
     reports,
     timetable,
     teaching_sessions,
+    desktop_sync,
 )
 
 app = FastAPI(title="Kelasi API")
@@ -85,6 +86,7 @@ app.include_router(communication.router, prefix=API_PREFIX)
 app.include_router(reports.router, prefix=API_PREFIX)
 app.include_router(timetable.router, prefix=API_PREFIX)
 app.include_router(teaching_sessions.router, prefix=API_PREFIX)
+app.include_router(desktop_sync.router, prefix=API_PREFIX)
 
 
 @app.get("/health")
